@@ -1,0 +1,2649 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Powder Run</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #13243a;
+    --panel: rgba(255, 255, 255, 0.72);
+    --accent: #ff5a3c;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: #dfeaf5;
+    font-family: "Fredoka", system-ui, sans-serif;
+    color: var(--ink);
+    user-select: none; -webkit-user-select: none;
+    touch-action: none;
+  }
+  canvas { display: block; }
+
+  #hud {
+    position: fixed; inset: 16px 16px auto 16px;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    pointer-events: none;
+    opacity: 0; transition: opacity .4s;
+  }
+  #hud.show { opacity: 1; }
+  .chip {
+    background: var(--panel);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    border-radius: 16px;
+    padding: 8px 16px;
+    box-shadow: 0 4px 18px rgba(20, 40, 70, .12);
+  }
+  .chip .label { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; opacity: .6; }
+  .chip .value { font-size: 30px; font-weight: 700; line-height: 1.05; font-variant-numeric: tabular-nums; }
+  .chip .unit { font-size: 15px; font-weight: 500; opacity: .6; margin-left: 2px; }
+  #zone { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); font-weight: 700; font-size: 15px; padding: 6px 14px; }
+  .hud-left { display: flex; gap: 10px; }
+  #points-chip { min-width: 92px; }
+  #points-chip.bump, #gems-chip.bump { animation: bump .35s ease-out; }
+  .gem-icon {
+    display: inline-block; width: 14px; height: 18px; margin-right: 6px; vertical-align: 1px;
+    background: linear-gradient(135deg, #8ff0ff, #2fb8f0 55%, #1a7fd1);
+    clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  }
+  @keyframes bump { 40% { transform: scale(1.12); } }
+  .level-track { height: 5px; margin-top: 5px; border-radius: 3px; background: rgba(19,36,58,.12); overflow: hidden; }
+  #level-bar { height: 100%; background: var(--accent); transform-origin: left; transform: scaleX(0); }
+
+  #toast {
+    position: fixed; left: 50%; top: 22%;
+    transform: translate(-50%, 0);
+    font-size: 40px; font-weight: 700; color: #fff;
+    text-shadow: 0 3px 0 var(--accent), 0 6px 24px rgba(19,36,58,.45);
+    pointer-events: none; white-space: nowrap; opacity: 0;
+  }
+  #toast.show { animation: toast 1.8s ease-out forwards; }
+  @keyframes toast {
+    0% { opacity: 0; transform: translate(-50%, 20px) scale(.8); }
+    15% { opacity: 1; transform: translate(-50%, 0) scale(1.08); }
+    25% { transform: translate(-50%, 0) scale(1); }
+    80% { opacity: 1; }
+    100% { opacity: 0; transform: translate(-50%, -10px); }
+  }
+
+  #overlay {
+    position: fixed; inset: 0;
+    display: grid; place-items: center;
+    background: linear-gradient(180deg, rgba(223,234,245,.15), rgba(19,36,58,.35));
+    transition: opacity .35s;
+  }
+  #overlay.hidden { opacity: 0; pointer-events: none; }
+  .card {
+    text-align: center;
+    padding: 28px 32px;
+    max-width: min(440px, calc(100vw - 32px));
+    background: rgba(255,255,255,.85);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border-radius: 24px;
+    box-shadow: 0 12px 40px rgba(20, 40, 70, .25);
+  }
+  .card h1 { margin: 0 0 4px; font-size: 48px; line-height: 1; letter-spacing: -.01em; }
+  .card h1 span { color: var(--accent); }
+  .card p { margin: 8px 0; opacity: .75; }
+  .keys { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; text-align: left; margin: 18px auto 20px; width: max-content; }
+  .keys[hidden] { display: none; }
+  kbd {
+    font-family: inherit; font-weight: 700; font-size: 13px;
+    background: #fff; border-radius: 6px; padding: 2px 7px;
+    box-shadow: 0 2px 0 rgba(19,36,58,.25);
+  }
+  .go {
+    display: inline-block; padding: 10px 22px; border-radius: 999px;
+    background: var(--accent); color: #fff; font-weight: 700; font-size: 18px;
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse { 50% { transform: scale(1.06); } }
+  .views { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0 0 20px; flex-wrap: wrap; }
+  .views-label { font-weight: 700; font-size: 14px; margin-right: 4px; }
+  .views button {
+    font: inherit; font-weight: 700; font-size: 15px; color: var(--ink);
+    background: #fff; border: 2px solid rgba(19,36,58,.15); border-radius: 999px;
+    padding: 6px 14px; cursor: pointer;
+  }
+  .views button.active { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .views button.locked { opacity: .5; }
+  .views .gem-icon { width: 10px; height: 13px; margin: 0 3px 0 2px; }
+  .skin-note { font-size: 14px; font-weight: 700; color: var(--accent); margin: -12px 0 14px; opacity: 1 !important; }
+  .skin-note:empty { display: none; }
+  @media (max-width: 520px) { .card h1 { font-size: 38px; } .chip .value { font-size: 24px; } #zone { display: none; } #toast { font-size: 28px; } }
+</style>
+</head>
+<body>
+<div id="hud">
+  <div class="hud-left">
+    <div class="chip" id="points-chip">
+      <div class="label">Points</div><div class="value"><span id="points">0</span></div>
+      <div class="level-track"><div id="level-bar"></div></div>
+    </div>
+    <div class="chip"><div class="label">Distance</div><div class="value"><span id="dist">0</span><span class="unit">m</span></div></div>
+    <div class="chip" id="gems-chip"><div class="label">Gems</div><div class="value"><span class="gem-icon"></span><span id="gems">0</span></div></div>
+  </div>
+  <div class="chip" id="zone">Forest</div>
+  <div class="chip"><div class="label">Speed</div><div class="value"><span id="speed">0</span><span class="unit">km/h</span></div></div>
+</div>
+
+<div id="toast"></div>
+
+<div id="overlay">
+  <div class="card">
+    <h1 id="title">Powder <span>Run</span></h1>
+    <p id="subtitle">Carve down the mountain. Don't hug the rocks.</p>
+    <div class="keys" id="keys">
+      <span><kbd>←</kbd> <kbd>→</kbd></span><span>Carve left / right</span>
+      <span><kbd>Space</kbd> <kbd>W</kbd></span><span>Jump</span>
+      <span><kbd>S</kbd></span><span>Duck</span>
+      <span><kbd>↓</kbd></span><span>Brake</span>
+      <span><kbd>P</kbd></span><span>Pause</span>
+    </div>
+    <div class="views" id="views">
+      <span class="views-label">View <kbd>V</kbd></span>
+      <button data-view="first">First person</button>
+      <button data-view="third">Third person</button>
+    </div>
+    <div class="views" id="skins">
+      <span class="views-label">Skins <span class="gem-icon"></span><span id="card-gems">0</span></span>
+      <button data-skin="classic">Classic</button>
+      <button data-skin="dogSled">Dog Sled</button>
+      <button data-skin="snowboard">Snowboard</button>
+      <button data-skin="snowmobile">Snowmobile</button>
+    </div>
+    <p class="skin-note" id="skin-note"></p>
+    <div class="go" id="go">Press Space or tap to start</div>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { mergeVertices, mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+
+// ---------------------------------------------------------------------------
+// Tuning
+// ---------------------------------------------------------------------------
+const SLOPE = THREE.MathUtils.degToRad(11); // how steep the mountain is
+const HALF_W = 18;           // half width of the groomed run
+const WALL_LIMIT = HALF_W - 0.8; // where the skier bounces off the rocks
+const SEG_LEN = 50;          // length of one recycled track segment
+const NUM_SEGS = 7;
+const BANK_WIDTH = 30;       // snow that rises up beyond the run
+
+const METERS_PER_POINT = 50;
+const START_KMH = 60;
+const KMH_PER_POINT = 1;     // every point makes the run this much faster
+const MILESTONE_POINTS = 10; // big pop-up message every this many points
+const PUSH_ACCEL = 14;       // how fast you get back up to speed (m/s²)
+const BRAKE = 20;
+const JUMP_VELOCITY = 10;
+const GRAVITY = 24;
+const EYE_HEIGHT = 1.65;
+const DUCK_DROP = 0.65;
+const TURN_RATE = 2.2;       // how fast steering turns you (radians per second)
+const MAX_HEADING = Math.PI / 2; // you can turn fully sideways, but never back uphill      // how much lower your eyes are when ducking
+
+// ---------------------------------------------------------------------------
+// Renderer / scene
+// ---------------------------------------------------------------------------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.3;
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+const HORIZON = new THREE.Color('#dce8f4');
+scene.background = makeSkyTexture();
+scene.fog = new THREE.Fog(HORIZON, 60, 260);
+
+const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.1, 1500);
+
+scene.add(new THREE.HemisphereLight('#d6e7ff', '#ffffff', 1.6));
+const sun = new THREE.DirectionalLight('#fff3e2', 2.6);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40, near: 1, far: 160 });
+sun.shadow.bias = -0.0004;
+sun.shadow.normalBias = 0.03;
+scene.add(sun, sun.target);
+
+// Everything on the mountain lives in this tilted group. Inside it the run is
+// flat: x = sideways, z = downhill (negative), y = up off the snow.
+const course = new THREE.Group();
+course.rotation.x = -SLOPE;
+scene.add(course);
+course.updateMatrixWorld();
+
+// ---------------------------------------------------------------------------
+// Textures
+// ---------------------------------------------------------------------------
+function makeSkyTexture() {
+  const c = document.createElement('canvas');
+  c.width = 4; c.height = 512;
+  const g = c.getContext('2d');
+  const grad = g.createLinearGradient(0, 0, 0, 512);
+  grad.addColorStop(0, '#5f9fdc');
+  grad.addColorStop(0.45, '#a9cbec');
+  grad.addColorStop(0.62, '#dce8f4');
+  grad.addColorStop(1, '#eef3f8');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 4, 512);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+function makeSnowTexture(corduroy) {
+  const size = 256;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const g = c.getContext('2d');
+  g.fillStyle = '#f4f8fd';
+  g.fillRect(0, 0, size, size);
+  if (corduroy) {
+    // Groomer ridges running downhill.
+    for (let x = 0; x < size; x += 8) {
+      g.fillStyle = 'rgba(160, 185, 215, 0.22)';
+      g.fillRect(x, 0, 3, size);
+      g.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      g.fillRect(x + 4, 0, 2, size);
+    }
+  }
+  for (let i = 0; i < 2600; i++) {
+    const v = Math.random();
+    g.fillStyle = v < 0.5 ? 'rgba(170,190,215,0.18)' : 'rgba(255,255,255,0.9)';
+    g.fillRect(Math.random() * size, Math.random() * size, 1 + Math.random() * 1.5, 1 + Math.random() * 1.5);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return t;
+}
+
+function makeDotTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.5, 'rgba(255,255,255,0.8)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+}
+
+function makeBannerTexture(text, aspect) {
+  const c = document.createElement('canvas');
+  c.height = 128; c.width = Math.round(c.height * aspect);
+  const g = c.getContext('2d');
+  g.fillStyle = '#ff5a3c';
+  g.fillRect(0, 0, c.width, c.height);
+  g.fillStyle = '#ffffff';
+  for (let x = 0; x < c.width; x += 64) {
+    g.fillRect(x, 0, 32, 12);
+    g.fillRect(x + 32, c.height - 12, 32, 12);
+  }
+  g.font = 'bold 80px Fredoka, system-ui, sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(text, c.width / 2, c.height / 2 + 4);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+// ---------------------------------------------------------------------------
+// Terrain helpers
+// ---------------------------------------------------------------------------
+const smoothstep = (a, b, x) => { const t = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+
+// Height of the snow at sideways offset x and downhill position z.
+function snowHeight(x, z) {
+  const ax = Math.abs(x);
+  if (ax <= HALF_W) return 0;
+  const t = smoothstep(HALF_W, HALF_W + 18, ax);
+  const lumps = (Math.sin(z * 0.11 + ax * 0.37) + 1.4 * Math.sin(z * 0.053 - ax * 0.21 + (x > 0 ? 2 : 0))) * 0.9;
+  return t * 13 + lumps * t;
+}
+
+// ---------------------------------------------------------------------------
+// Rocks: small libraries of lumpy boulders reused everywhere.
+// ---------------------------------------------------------------------------
+const ROCK_TONES = ['#6d7079', '#7a7268', '#5d6169', '#847d73', '#666a73'].map(c => new THREE.Color(c));
+const BROWN_ROCK_TONES = ['#7a5536', '#6b4a2f', '#86603d', '#5f4129'].map(c => new THREE.Color(c));
+const SNOW_CAP = new THREE.Color('#f1f5fb');
+
+// snowLine: how upward-facing a face must be (0..1) before it gets snow on it.
+function makeRockGeometry(tones = ROCK_TONES, snowLine = 0.55) {
+  let g = new THREE.IcosahedronGeometry(1, 1);
+  g.deleteAttribute('normal');
+  g.deleteAttribute('uv');
+  g = mergeVertices(g);
+  const p = g.attributes.position;
+  const v = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i).multiplyScalar(0.72 + Math.random() * 0.5);
+    p.setXYZ(i, v.x, v.y, v.z);
+  }
+  g.scale(1 + Math.random() * 0.5, 0.65 + Math.random() * 0.55, 1 + Math.random() * 0.5);
+  g.rotateX((Math.random() - 0.5) * 0.5);
+  g.rotateZ((Math.random() - 0.5) * 0.5);
+  g = g.toNonIndexed();
+  g.computeVertexNormals();
+
+  const n = g.attributes.normal;
+  const colors = new Float32Array(n.count * 3);
+  const base = tones[Math.floor(Math.random() * tones.length)];
+  const col = new THREE.Color();
+  for (let f = 0; f < n.count; f += 3) {
+    const ny = (n.getY(f) + n.getY(f + 1) + n.getY(f + 2)) / 3;
+    if (ny > snowLine + Math.random() * 0.15) col.copy(SNOW_CAP);
+    else col.copy(base).multiplyScalar(0.82 + Math.random() * 0.32);
+    for (let k = 0; k < 3; k++) col.toArray(colors, (f + k) * 3);
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  return g;
+}
+
+const pick = list => list[Math.floor(Math.random() * list.length)];
+const rockGeos = Array.from({ length: 18 }, () => makeRockGeometry());
+const brownRockGeos = Array.from({ length: 10 }, () => makeRockGeometry(BROWN_ROCK_TONES, 0.85));
+const rockMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95 });
+const randomRockGeo = () => pick(rockGeos);
+const BROWN_TONES = ['#8f5a31', '#a0683b', '#7d4c2a', '#94603a', '#6f4325'].map(c => new THREE.Color(c)); // Rocks biome and chasm stones
+
+// ---------------------------------------------------------------------------
+// Pine trees: stacked green tiers with snow sitting on top of each one.
+// ---------------------------------------------------------------------------
+const TREE_BRANCH_BOTTOM = 0.9; // lowest branches, before the tree is scaled up
+const TREE_GREENS = ['#2e6b3f', '#28603a', '#357244', '#245a35'].map(c => new THREE.Color(c));
+const TRUNK_BROWN = new THREE.Color('#5b3d27');
+
+// Give every triangle of a non-indexed geometry one color, chosen from its average height.
+function colorFaces(g, colorAt) {
+  const p = g.attributes.position;
+  const colors = new Float32Array(p.count * 3);
+  const col = new THREE.Color();
+  for (let f = 0; f < p.count; f += 3) {
+    col.copy(colorAt((p.getY(f) + p.getY(f + 1) + p.getY(f + 2)) / 3));
+    for (let k = 0; k < 3; k++) col.toArray(colors, (f + k) * 3);
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  g.deleteAttribute('uv');
+  return g;
+}
+
+function makeTreeGeometry() {
+  const trunk = new THREE.CylinderGeometry(0.16, 0.24, 1.4, 6).toNonIndexed();
+  trunk.translate(0, 0.7, 0);
+  const parts = [colorFaces(trunk, () => TRUNK_BROWN)];
+
+  const green = pick(TREE_GREENS);
+  const tiers = [[1.7, 2.2, TREE_BRANCH_BOTTOM], [1.35, 1.9, 2.1], [0.95, 1.6, 3.2]]; // radius, height, bottom
+  for (const [r, h, y0] of tiers) {
+    const cone = new THREE.ConeGeometry(r * (0.9 + Math.random() * 0.2), h, 8, 2).toNonIndexed();
+    cone.rotateY(Math.random() * Math.PI);
+    cone.translate(0, y0 + h / 2, 0);
+    parts.push(colorFaces(cone, y => {
+      const t = (y - y0) / h;
+      // Snow piles on the upper part of each tier and dusts some branch tips.
+      if (t > 0.58 + Math.random() * 0.25 || (t < 0.3 && Math.random() < 0.3)) return SNOW_CAP;
+      return new THREE.Color().copy(green).multiplyScalar(0.85 + Math.random() * 0.3);
+    }));
+  }
+  return mergeGeometries(parts);
+}
+
+const treeGeos = Array.from({ length: 6 }, makeTreeGeometry);
+const treeMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9 });
+
+// ---------------------------------------------------------------------------
+// Snowmen: two lumpy snowballs, coal eyes and buttons, carrot nose, stick arms.
+// They face uphill, toward the skier.
+// ---------------------------------------------------------------------------
+const SNOWBALL_WHITES = ['#f4f7fb', '#e8eef5', '#dde5ee'].map(c => new THREE.Color(c));
+const COAL = new THREE.Color('#23262c');
+const CARROT = new THREE.Color('#f07c1e');
+const STICK = new THREE.Color('#5a3b22');
+const SCARF = new THREE.Color('#d8343a');
+const RAMP_WOOD = new THREE.Color('#b8743a');
+const RAMP_FLAG = new THREE.Color('#ff6a1a');
+const SNOWMAN = { bodyY: 0.6, bodyR: 0.75, headR: 0.5 };
+SNOWMAN.headY = SNOWMAN.bodyY + (SNOWMAN.bodyR + SNOWMAN.headR) * 0.85;
+const SNOWMAN_HEIGHT = SNOWMAN.headY + SNOWMAN.headR; // top of the head, before scaling
+
+// A fallen snowman lies on its side across the run, both balls resting on the snow.
+const FALLEN = (() => {
+  const { bodyY, bodyR, headR, headY } = SNOWMAN;
+  const droop = Math.asin((bodyR - headR) / (headY - bodyY)); // head tips down to the ground
+  const lay = Math.cos(droop);
+  const bodyX = -bodyY * lay, headX = -headY * lay; // where the balls end up, sideways
+  const ends = [bodyX + bodyR, headX - headR];
+  return {
+    roll: Math.PI / 2 + droop,
+    lift: bodyR + bodyY * Math.sin(droop), // raise it so the body sits on the snow
+    shift: -(ends[0] + ends[1]) / 2,         // centre the whole length on its spot
+    halfLen: (ends[0] - ends[1]) / 2,
+    // Body and head are hit separately: the head is low enough to jump.
+    balls: [{ x: bodyX, r: bodyR }, { x: headX, r: headR }],
+  };
+})();
+
+// Flat-colored, non-indexed part ready to merge with the others.
+function part(g, colorAt) {
+  if (g.index) g = g.toNonIndexed();
+  g.deleteAttribute('normal');
+  return colorFaces(g, colorAt);
+}
+
+function lumpyBall(r) {
+  let g = new THREE.IcosahedronGeometry(r, 1);
+  g.deleteAttribute('normal');
+  g.deleteAttribute('uv');
+  g = mergeVertices(g);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const k = 0.9 + Math.random() * 0.18;
+    p.setXYZ(i, p.getX(i) * k, p.getY(i) * k, p.getZ(i) * k);
+  }
+  return part(g, () => pick(SNOWBALL_WHITES));
+}
+
+// A thin cylinder from a to b.
+function stick(a, b, r, color) {
+  const dir = new THREE.Vector3().subVectors(b, a);
+  const g = new THREE.CylinderGeometry(r, r * 1.3, dir.length(), 5);
+  g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize()));
+  g.translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
+  return part(g, () => color);
+}
+
+function makeSnowmanGeometry() {
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  const { bodyY, bodyR, headR, headY } = SNOWMAN;
+
+  const body = lumpyBall(bodyR);
+  body.translate(0, bodyY, 0);
+  const head = lumpyBall(headR);
+  head.translate(0, headY, 0);
+  const parts = [body, head];
+
+  const coal = (x, y, z, r) => {
+    const g = part(new THREE.DodecahedronGeometry(r), () => COAL);
+    g.translate(x, y, z);
+    parts.push(g);
+  };
+  coal(-0.17, headY + 0.12, headR * 0.88, 0.055);
+  coal(0.17, headY + 0.12, headR * 0.88, 0.055);
+  for (const y of [bodyY + 0.42, bodyY + 0.12, bodyY - 0.18]) {
+    coal(0, y, Math.sqrt(bodyR * bodyR - (y - bodyY) ** 2) * 0.95, 0.07);
+  }
+
+  const nose = part(new THREE.ConeGeometry(0.07, 0.4, 6), () => CARROT);
+  nose.rotateX(Math.PI / 2);
+  nose.translate(0, headY, headR + 0.12);
+  parts.push(nose);
+
+  // Arms stick out of the top of the bottom ball.
+  const armY = bodyY + bodyR * 0.55;
+  const armX = Math.sqrt(bodyR * bodyR - (armY - bodyY) ** 2) * 0.85;
+  for (const side of [-1, 1]) {
+    const shoulder = V(side * armX, armY, 0);
+    const hand = V(side * (1.3 + Math.random() * 0.25), armY + 0.2 + Math.random() * 0.4, (Math.random() - 0.5) * 0.3);
+    parts.push(stick(shoulder, hand, 0.035, STICK));
+    const mid = shoulder.clone().lerp(hand, 0.65);
+    parts.push(stick(mid, mid.clone().add(V(side * 0.15, 0.22, 0)), 0.025, STICK));
+  }
+
+  if (Math.random() < 0.35) {
+    const neckY = bodyY + bodyR * 0.9;
+    const scarf = part(new THREE.TorusGeometry(headR * 0.8, 0.09, 5, 10), () => SCARF);
+    scarf.rotateX(Math.PI / 2);
+    scarf.translate(0, neckY, 0);
+    const tail = part(new THREE.BoxGeometry(0.16, 0.45, 0.06), () => SCARF);
+    tail.rotateZ(0.2);
+    tail.translate(0.2, neckY - 0.22, headR * 0.82);
+    parts.push(scarf, tail);
+  }
+
+  const g = mergeGeometries(parts);
+  g.computeVertexNormals();
+  return g;
+}
+
+const snowmanGeos = Array.from({ length: 8 }, makeSnowmanGeometry);
+
+// Just a big snowman head sitting in the snow: low enough to jump.
+const SNOW_HEAD = { r: 0.8, y: 0.7 };
+function makeSnowHeadGeometry() {
+  const { r, y } = SNOW_HEAD;
+  const head = lumpyBall(r);
+  head.translate(0, y, 0);
+  const parts = [head];
+
+  const coal = (x, cy, size) => {
+    const g = part(new THREE.DodecahedronGeometry(size), () => COAL);
+    g.translate(x, cy, Math.sqrt(Math.max(0, r * r - x * x - (cy - y) ** 2)) * 0.95);
+    parts.push(g);
+  };
+  coal(-0.27, y + 0.22, 0.08);
+  coal(0.27, y + 0.22, 0.08);
+  for (let k = -2; k <= 2; k++) coal(k * 0.13, y - 0.3 + Math.abs(k) * 0.05, 0.05); // smile
+
+  const nose = part(new THREE.ConeGeometry(0.1, 0.55, 6), () => CARROT);
+  nose.rotateX(Math.PI / 2);
+  nose.translate(0, y, r + 0.18);
+  parts.push(nose);
+
+  const g = mergeGeometries(parts);
+  g.computeVertexNormals();
+  return g;
+}
+const snowHeadGeos = Array.from({ length: 6 }, makeSnowHeadGeometry);
+
+// Big chunky boulders with flat chopped faces and a flat, snowy top, 1 wide and 1 tall.
+// Scaled into low ledges you can ride on, or tall pillars you can't.
+function makeLedgeGeometry() {
+  let g = new THREE.IcosahedronGeometry(1, 1);
+  g.deleteAttribute('normal');
+  g.deleteAttribute('uv');
+  g = mergeVertices(g);
+  const top = 0.45, bottom = -0.55; // chopped flat here
+  const p = g.attributes.position;
+  const v = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i).multiplyScalar(0.85 + Math.random() * 0.3);
+    v.y = THREE.MathUtils.clamp(v.y, bottom, top);
+    p.setXYZ(i, v.x * 0.45, (v.y - bottom) / (top - bottom), v.z * 0.45);
+  }
+  // Chop a few corners off at an angle for slanted faces, and lean the whole rock a little.
+  const leanX = (Math.random() - 0.5) * 0.16, leanZ = (Math.random() - 0.5) * 0.16;
+  const chops = Array.from({ length: 4 }, () => {
+    const a = Math.random() * Math.PI * 2;
+    return { n: new THREE.Vector3(Math.cos(a), Math.random() * 0.6, Math.sin(a)).normalize(), d: 0.34 + Math.random() * 0.1 };
+  });
+  for (let i = 0; i < p.count; i++) {
+    v.set(p.getX(i), p.getY(i) - 0.5, p.getZ(i));
+    for (const { n, d } of chops) {
+      const over = v.dot(n) - d;
+      if (over > 0) v.addScaledVector(n, -over);
+    }
+    const y = Math.max(0, v.y + 0.5);
+    p.setXYZ(i, v.x + leanX * y, y, v.z + leanZ * y);
+  }
+  g = g.toNonIndexed();
+  g.computeVertexNormals();
+  const q = g.attributes.position;
+
+  // Snow over the top third, brown rock below.
+  const n = g.attributes.normal;
+  const colors = new Float32Array(n.count * 3);
+  const tone = pick(BROWN_TONES);
+  const col = new THREE.Color();
+  for (let f = 0; f < n.count; f += 3) {
+    const ny = (n.getY(f) + n.getY(f + 1) + n.getY(f + 2)) / 3;
+    const cy = (q.getY(f) + q.getY(f + 1) + q.getY(f + 2)) / 3;
+    if (ny > 0.45 + Math.random() * 0.15 || cy > 0.7 + Math.random() * 0.1) col.copy(pick(SNOWBALL_WHITES)); // a thick cap of snow
+    else col.copy(tone).multiplyScalar(0.72 + Math.random() * 0.45);
+    for (let k = 0; k < 3; k++) col.toArray(colors, (f + k) * 3);
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  return g;
+}
+const ledgeGeos = Array.from({ length: 8 }, makeLedgeGeometry);
+
+// A drift of snow banked up against the uphill side of a ledge: 1 wide, 1 high at z = 0, down to the snow at z = 1.
+function makeDriftGeometry() {
+  const g = new THREE.BoxGeometry(1, 1, 1, 1, 1, 1).toNonIndexed();
+  g.translate(0, 0.5, 0.5);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    if (p.getZ(i) > 0.5 && p.getY(i) > 0.5) p.setY(i, 0.01);
+  }
+  g.deleteAttribute('normal');
+  const out = colorFaces(g, () => SNOWBALL_WHITES[0]);
+  out.computeVertexNormals();
+  return out;
+}
+const driftGeo = makeDriftGeometry();
+
+// ---------------------------------------------------------------------------
+// Biomes: which stretch of the mountain you're in, by distance travelled.
+// ---------------------------------------------------------------------------
+const START_CLEAR = 30;     // just enough room to push off from the start gate
+const LEDGE_DRIFT_CHANCE = 0.5; // ledges with a snow drift you can ride straight up
+const DRIFT_INSET = 0.2;    // how far into the rock the top of a drift starts
+const STEP_UP = 0.5;        // you ride up onto anything this close below your skis; anything higher you hit
+const BIOME_LEN = 250;      // meters of each biome before a random different one starts
+
+// Obstacle types: how big one is, and how wide it is to hit.
+const OBSTACLES = {
+  tree: { size: () => THREE.MathUtils.lerp(TREE_SCALE[0], TREE_SCALE[1], Math.random()), radius: s => 1.2 * s },
+  rock: { size: () => 0.7 + Math.random() * 0.55, radius: s => 0.8 * s },
+  snowman: {
+    size: () => 1.4 + Math.random() * 0.4,
+    radius: s => 0.75 * s,
+  },
+};
+OBSTACLES.fallenSnowman = { size: OBSTACLES.snowman.size, radius: s => FALLEN.halfLen * s };
+OBSTACLES.snowHead = { size: () => 0.85 + Math.random() * 0.25, radius: s => SNOW_HEAD.r * s };
+// Rocks in the Rocks biome come in three heights, and mostly in groups merged into one
+// formation: short + medium, or short + medium + tall. Usually they step up as you go downhill,
+// so you can jump from one top onto the next.
+const ROCK_STEP = [0.9, 1.2]; // how much higher each step of a formation is
+const ROCK_PIECES = {
+  short: () => ({ h: 1.2 + Math.random() * 0.3, w: 4 + Math.random() * 2, d: 4 + Math.random() * 2 }),
+  medium: () => ({ h: 2.3 + Math.random() * 0.5, w: 3.5 + Math.random() * 1.5, d: 4 + Math.random() * 1.5 }),
+  tall: () => ({ h: 3.5 + Math.random() * 0.8, w: 3 + Math.random() * 1.5, d: 3.5 + Math.random() * 1.5 }),
+};
+function rockFormation(names) {
+  const pieces = names.map(name => ({ ...ROCK_PIECES[name](), dx: 0, dz: 0, drift: 0 }));
+  if (pieces.length > 1 && Math.random() < 0.3) {
+    // Side by side across the run.
+    let x = 0;
+    const side = Math.random() < 0.5 ? -1 : 1;
+    for (const p of pieces) { p.dx = side * (x + p.w / 2); p.dz = (Math.random() - 0.5) * 1.5; x += p.w * 0.8; }
+  } else {
+    // Stepping up as you go downhill, each one tucked into the last and one jump higher.
+    let z = 0;
+    pieces.forEach((p, i) => {
+      p.dz = z - p.d / 2;
+      p.dx = (Math.random() - 0.5) * 1.6;
+      z -= p.d * 0.8;
+      if (i > 0) p.h = pieces[i - 1].h + ROCK_STEP[0] + Math.random() * (ROCK_STEP[1] - ROCK_STEP[0]);
+    });
+  }
+  // Centre the group on its spot.
+  const span = (key, half) => [Math.min(...pieces.map(p => p[key] - p[half] / 2)), Math.max(...pieces.map(p => p[key] + p[half] / 2))];
+  const [x0, x1] = span('dx', 'w'), [z0, z1] = span('dz', 'd');
+  for (const p of pieces) { p.dx -= (x0 + x1) / 2; p.dz -= (z0 + z1) / 2; }
+  // A drift up the uphill side of the short one, so you can ride on without jumping.
+  if (names[0] === 'short' && Math.random() < LEDGE_DRIFT_CHANCE) pieces[0].drift = pieces[0].h * 4.5;
+  return { pieces, halfX: (x1 - x0) / 2, halfZ: (z1 - z0) / 2 };
+}
+const formationKind = names => ({
+  size: () => rockFormation(typeof names === 'function' ? names() : names),
+  radius: f => Math.hypot(f.halfX, f.halfZ),
+  extent: f => [f.halfX, f.halfZ],
+  pool: 'rockPiece',
+});
+OBSTACLES.rockSingle = formationKind(() => [pick(['short', 'short', 'medium', 'tall'])]);
+OBSTACLES.rockPair = formationKind(['short', 'medium']);
+OBSTACLES.rockStack = formationKind(['short', 'medium', 'tall']);
+
+// mix: how likely each obstacle type is. wallGeos: what the rock walls look like.
+const BIOMES = {
+  forest: { name: 'Forest', obstaclesPerSeg: 16, mix: { tree: 0.75, rock: 0.25 }, bankTrees: 9, wallGeos: rockGeos },
+  snowmen: { name: 'Snowmen', obstaclesPerSeg: 20, mix: { snowman: 0.45, fallenSnowman: 0.25, snowHead: 0.3 }, bankTrees: 0, wallGeos: rockGeos, setup: setupRollers },
+  rocks: { name: 'Rocks', obstaclesPerSeg: 6, mix: { rockSingle: 0.2, rockPair: 0.35, rockStack: 0.45 }, bankTrees: 3, wallGeos: rockGeos },
+  // Custom: a long chasm with stone pillars to jump between.
+  chasm: { name: 'Chasm', obstaclesPerSeg: 0, mix: {}, bankTrees: 4, wallGeos: rockGeos, setup: setupChasm, notFirst: true },
+  // Custom: one trench across the whole run, and a single ramp that gets you over it.
+  trench: { name: 'Trench', obstaclesPerSeg: 0, mix: {}, bankTrees: 6, wallGeos: rockGeos, setup: setupTrench, notFirst: true },
+  // Custom: a cliff right across the run, and one narrow passage through it.
+  cliff: { name: 'Rock Wall', obstaclesPerSeg: 0, mix: {}, bankTrees: 6, wallGeos: rockGeos, setup: setupCliff, notFirst: true },
+};
+const BIOME_LIST = Object.values(BIOMES);
+
+// The mountain is a chain of stretches, one biome each, made up as you go:
+// a random biome every time, never the same one twice in a row, and every biome
+// comes up once before any of them comes round again.
+let stretches = [];
+let biomeBag = [];
+function newBiomeRun() {
+  stretches = [];
+  biomeBag = [];
+}
+function addStretch() {
+  const prev = stretches[stretches.length - 1];
+  if (!biomeBag.length) biomeBag = [...BIOME_LIST];
+  const biome = pick(biomeBag.filter(b => b !== prev?.biome && (prev || !b.notFirst)));
+  biomeBag.splice(biomeBag.indexOf(biome), 1);
+  const start = prev ? prev.end : 0;
+  const stretch = { biome, start, end: start + BIOME_LEN };
+  biome.setup?.(stretch); // custom biomes lay themselves out, and can change their length
+  stretches.push(stretch);
+}
+function stretchAt(dist) {
+  dist = Math.max(0, dist);
+  while (!stretches.length || stretches[stretches.length - 1].end <= dist) addStretch();
+  let i = stretches.length - 1;
+  while (stretches[i].start > dist) i--;
+  return stretches[i];
+}
+
+function pickKind(biome) {
+  let roll = Math.random();
+  for (const [kind, chance] of Object.entries(biome.mix)) {
+    if ((roll -= chance) < 0) return kind;
+  }
+  return Object.keys(biome.mix)[0];
+}
+const biomeAt = dist => stretchAt(dist).biome;
+
+// Rows of big snowballs rolling across the slope at the start of a biome, with gaps to ski through.
+// Gems: the currency, hidden in awkward spots. GEM_CHANCE: how often a segment with trees or climbable rocks has one.
+const GEM_CHANCE = 0.5;
+const GEM_LIFT = 0.55;       // how high a gem floats over whatever it's sitting on
+const GEM_REACH = 0.75;      // how close you have to get to pick one up
+const GEM_RAMP_CHANCE = 0.7; // a gem up on the trench ramp
+const GEMS_PER_CHASM = 3;    // out on some of the chasm stones
+
+const ROLLER_ROWS = [15];         // meters into the biome
+const ROLLER_RADIUS = 1.2;        // about a big snowman's bottom ball
+const ROLLERS_PER_ROW = 7;        // spread evenly, so the gaps between them are all the same
+const ROLLER_SPEED = [5, 8];      // m/s across the slope
+const ROLLER_REACH = HALF_W + 2;  // they roll on into the rock walls and come out the other side
+const ROLLER_CLEAR = 3.5;         // no snowmen this close to a row
+function setupRollers(stretch) {
+  const start = Math.max(stretch.start, START_CLEAR);
+  const flip = Math.random() < 0.5 ? -1 : 1;
+  stretch.rollers = ROLLER_ROWS.map((at, i) => ({
+    dist: start + at,
+    dir: (i % 2 ? -1 : 1) * flip, // neighbouring rows roll opposite ways
+    speed: THREE.MathUtils.lerp(ROLLER_SPEED[0], ROLLER_SPEED[1], Math.random()),
+    phase: Math.random() * ROLLER_REACH * 2,
+  }));
+}
+const nearRollerRow = dist => (stretchAt(dist).rollers ?? []).some(r => Math.abs(r.dist - dist) < ROLLER_CLEAR);
+
+// Trench: a clear run-up with the ramp at the end of it, then the drop, then somewhere to land.
+const TRENCH_RUNUP = 30;   // clear snow before the lip, to line up with the ramp
+const TRENCH_LANDING = 15; // clear snow after the far side
+const TRENCH_DEPTH = 12;
+const TRENCH_MARGIN = 5;   // how much wider than your best normal jump
+const RAMP_W = 5;
+const RAMP_LEN = 8;
+const RAMP_H = 1.6;
+const RAMP_CLEARANCE = 4;  // the ramp sends you this far past the far side
+function setupTrench(stretch) {
+  // Wide enough that a normal jump at this point's speed falls short.
+  const speed = (START_KMH + KMH_PER_POINT * Math.floor(stretch.start / METERS_PER_POINT)) / 3.6;
+  const width = Math.ceil(speed * 2 * JUMP_VELOCITY / GRAVITY) + TRENCH_MARGIN;
+  const lip = stretch.start + TRENCH_RUNUP;
+  const reach = HALF_W - RAMP_W / 2 - 2;
+  stretch.trench = { x: (Math.random() * 2 - 1) * reach, lip, from: lip + 0.5, to: lip + 0.5 + width };
+  stretch.pit = { from: stretch.trench.from, to: stretch.trench.to, color: TRENCH_COLOR };
+  stretch.end = stretch.trench.to + TRENCH_LANDING;
+  // Near the top of the ramp, off to one side.
+  const along = 0.75 + Math.random() * 0.15;
+  stretch.gems = Math.random() < GEM_RAMP_CHANCE ? [{
+    x: stretch.trench.x + (Math.random() * 2 - 1) * (RAMP_W / 2 - 0.6), y: RAMP_H * along + GEM_LIFT, z: -(lip - RAMP_LEN * (1 - along)), taken: false,
+  }] : [];
+}
+const trenchAt = dist => stretchAt(dist).trench;
+const TRENCH_COLOR = new THREE.Color(0.32, 0.42, 0.6);
+
+// Chasm: a long drop across the whole run with rows of snow-topped stone pillars to jump between.
+const CHASM_LEN = 150;     // the whole biome
+const CHASM_RUNUP = 15;
+const CHASM_LANDING = 15;
+const CHASM_COLOR = new THREE.Color(0.5, 0.33, 0.2);
+function setupChasm(stretch) {
+  // Gaps and pillars sized off how far a normal jump carries you here: jump anywhere on the
+  // back two thirds of a stone (right up to the edge) and you land on the next row.
+  const speed = (START_KMH + KMH_PER_POINT * Math.floor(stretch.start / METERS_PER_POINT)) / 3.6;
+  const reach = speed * 2 * JUMP_VELOCITY / GRAVITY;
+  const gap = Math.max(4, reach * 0.35);
+  const depth = reach * 0.65 + 1.5;
+  const from = stretch.start + CHASM_RUNUP;
+  const stones = [];
+  let d = from + gap;
+  while (d + depth + gap < stretch.start + CHASM_LEN - CHASM_LANDING) {
+    // A row of 2-4 stones across the run, with gaps between them too.
+    const n = pick([2, 3, 3, 4]);
+    const sideGaps = Array.from({ length: n - 1 }, () => 2.5 + Math.random() * 2.5);
+    const room = 2 * (HALF_W - 1) - sideGaps.reduce((a, b) => a + b, 0);
+    const shares = Array.from({ length: n }, () => 0.6 + Math.random() * 0.8);
+    const total = shares.reduce((a, b) => a + b, 0);
+    let x = -(HALF_W - 1);
+    shares.forEach((share, i) => {
+      const w = room * share / total;
+      stones.push({ x: x + w / 2, d: d + depth / 2 + (Math.random() - 0.5), rx: w / 2, rd: depth / 2 * (0.95 + Math.random() * 0.1) });
+      x += w + (sideGaps[i] ?? 0);
+    });
+    d += depth + gap;
+  }
+  stretch.pit = { from, to: d, stones, color: CHASM_COLOR };
+  stretch.end = d + CHASM_LANDING;
+  // On a few stones past the first row.
+  const later = stones.filter(st => st.d > stones[0].d + 2).sort(() => Math.random() - 0.5);
+  stretch.gems = later.slice(0, GEMS_PER_CHASM).map(st => ({
+    x: st.x + (Math.random() - 0.5) * st.rx, y: GEM_LIFT, z: -(st.d + (Math.random() - 0.5) * st.rd), taken: false,
+  }));
+}
+// Rock wall: a gray cliff right across the run, with one narrow passage cut through it.
+const CLIFF_RUNUP = 25;          // clear snow to line up with the passage
+const CLIFF_THICK = 12;          // how long the passage is
+const CLIFF_LANDING = 13;
+const CLIFF_H = 8;
+const CLIFF_OUT = HALF_W + 12;   // runs on into the banks
+const PASSAGE_W = 3;             // just room for the skier
+const TUNNEL_H = 4.2;            // the passage is roofed over, but you can still jump in it
+function setupCliff(stretch) {
+  const from = stretch.start + CLIFF_RUNUP;
+  const reach = HALF_W - PASSAGE_W / 2 - 3;
+  stretch.cliff = { x: (Math.random() * 2 - 1) * reach, from, to: from + CLIFF_THICK };
+  stretch.end = stretch.cliff.to + CLIFF_LANDING;
+}
+// The cliff you're alongside (or about to hit) at this distance, if any.
+const cliffAt = dist => {
+  const c = stretchAt(dist).cliff;
+  return c && dist > c.from - 1 && dist < c.to ? c : null;
+};
+// Keep a camera x inside the passage while it's between the cliff faces.
+const inPassage = (x, z, margin) => {
+  const c = cliffAt(-z);
+  return c && -z > c.from ? THREE.MathUtils.clamp(x, c.x - PASSAGE_W / 2 + margin, c.x + PASSAGE_W / 2 - margin) : x;
+};
+
+const onStone = (pit, x, d) => pit.stones?.some(st => ((x - st.x) / st.rx) ** 2 + ((d - st.d) / st.rd) ** 2 <= 1);
+
+// Height of the snow under the skier: up the ramp, down in a pit (unless you're on a stone),
+// on top of a rock, flat everywhere else. y: how high you are now, since you only get on top of what you clear.
+function groundAt(x, z, y = Infinity) {
+  const d = -z;
+  const { trench: t, pit } = stretchAt(d);
+  if (t && d > t.lip - RAMP_LEN && d <= t.lip && Math.abs(x - t.x) < RAMP_W / 2) return RAMP_H * (d - (t.lip - RAMP_LEN)) / RAMP_LEN;
+  if (pit && d > pit.from && d < pit.to) return onStone(pit, x, d) ? 0 : -TRENCH_DEPTH;
+  return ledgeHeight(x, z, y);
+}
+
+function ledgeHeight(x, z, y) {
+  let h = 0;
+  for (const s of segments) {
+    if (Math.abs(s.z - z) > SEG_LEN) continue;
+    for (const o of s.obstacles) {
+      if (!o.top || Math.abs(x - o.x) > o.halfW) continue;
+      const dx = x - o.x, along = z - o.z; // + is uphill, where the drift is
+      let top = 0;
+      if ((dx / o.halfW) ** 2 + (along / o.halfD) ** 2 <= 1) top = o.top;
+      else if (o.drift && Math.abs(dx) < o.driftHalfW && along > 0 && along < o.halfD + o.drift) {
+        top = o.top * Math.min(1, (o.halfD + o.drift - along) / (o.drift + o.halfD * DRIFT_INSET));
+      }
+      if (top > h && y >= top - STEP_UP) h = top;
+    }
+  }
+  return h;
+}
+
+// How far the ground is cut away for a trench or chasm, with steep sides.
+function pitCut(x, z) {
+  const t = stretchAt(-z).pit;
+  if (!t) return 0;
+  const d = -z;
+  const across = 1 - smoothstep(HALF_W + 1, HALF_W + 4, Math.abs(x)); // tucked under the rock walls
+  const along = Math.min(smoothstep(t.from - 0.6, t.from + 0.6, d), 1 - smoothstep(t.to - 0.6, t.to + 0.6, d));
+  return -TRENCH_DEPTH * across * along;
+}
+
+const OBSTACLE_GAP = 4.5;   // minimum spacing between obstacles on the run
+const EXTRA_OBSTACLES = 10; // added gradually the further down you get...
+const EXTRA_EVERY = 250;    // ...one more per segment every this many meters
+const TREE_SCALE = [1.4, 2.0];
+const ROCKY_TREE_CHANCE = 0.4; // trees with rocks around the trunk: no ducking under these
+const ROCKS_PER_ROCKY_TREE = 3;
+const BAND = 6;             // the run is checked in strips this long...
+const MIN_GAP = 3.5;        // ...and every strip keeps a gap at least this wide
+const PLAYER_RADIUS = 0.35;
+const SKIER_HEIGHT = 1.85;  // top of your head standing up...
+const DUCK_SHRINK = 0.8;    // ...and how much lower it is fully ducked (fits under the branches)
+
+// Widest open stretch across the run, given blocked [from, to] intervals.
+function widestGap(spans) {
+  let cursor = -WALL_LIMIT, best = 0;
+  for (const [a, b] of [...spans].sort((p, q) => p[0] - q[0])) {
+    best = Math.max(best, a - cursor);
+    cursor = Math.max(cursor, b);
+  }
+  return Math.max(best, WALL_LIMIT - cursor);
+}
+
+// ---------------------------------------------------------------------------
+// Track segments (recycled as the skier moves downhill)
+// ---------------------------------------------------------------------------
+const bankTex = makeSnowTexture(false);
+bankTex.repeat.set((HALF_W + BANK_WIDTH) * 2 / 7, SEG_LEN / 7);
+const runTex = makeSnowTexture(true);
+runTex.repeat.set(HALF_W * 2 / 5, SEG_LEN / 5);
+
+const bankMat = new THREE.MeshStandardMaterial({ map: bankTex, color: '#ffffff', roughness: 0.92, vertexColors: true });
+const runMat = new THREE.MeshStandardMaterial({
+  map: runTex, roughness: 0.8,
+  polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+});
+
+// Rock wall layout per side: [count per segment, min radius, max radius, distance beyond run edge, cast shadows]
+const ROCK_LAYERS = [
+  { count: 15, rMin: 1.4, rMax: 2.6, out: 0.0, shadow: true },
+  { count: 8, rMin: 2.6, rMax: 4.2, out: 4.5, shadow: true },
+  { count: 5, rMin: 4.5, rMax: 7.5, out: 11, shadow: false },
+];
+
+class Segment {
+  constructor() {
+    this.group = new THREE.Group();
+    course.add(this.group);
+
+    const w = (HALF_W + BANK_WIDTH) * 2;
+    const geo = new THREE.PlaneGeometry(w, SEG_LEN, 70, 50);
+    geo.rotateX(-Math.PI / 2);
+    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 3), 3));
+    this.ground = new THREE.Mesh(geo, bankMat);
+    this.ground.receiveShadow = true;
+    this.group.add(this.ground);
+
+    const runGeo = new THREE.PlaneGeometry(HALF_W * 2 + 0.6, SEG_LEN, 1, 50);
+    runGeo.rotateX(-Math.PI / 2);
+    this.run = new THREE.Mesh(runGeo, runMat);
+    this.run.position.y = 0.01;
+    this.run.receiveShadow = true;
+    this.group.add(this.run);
+
+    this.rocks = [];
+    for (const layer of ROCK_LAYERS) {
+      for (const side of [-1, 1]) {
+        for (let i = 0; i < layer.count; i++) {
+          const m = new THREE.Mesh(randomRockGeo(), rockMat);
+          m.castShadow = layer.shadow;
+          m.receiveShadow = true;
+          m.userData = { layer, side, i };
+          this.group.add(m);
+          this.rocks.push(m);
+        }
+      }
+    }
+
+    // Obstacle pools; reset() decides how many are used.
+    const maxObstacles = Math.max(...Object.values(BIOMES).map(b => b.obstaclesPerSeg)) + EXTRA_OBSTACLES;
+    this.pools = {
+      tree: Array.from({ length: maxObstacles }, () => this.addProp(treeGeos[0], treeMat)),
+      rock: Array.from({ length: maxObstacles }, () => this.addProp(brownRockGeos[0], rockMat)),
+      snowman: Array.from({ length: maxObstacles }, () => this.addProp(snowmanGeos[0], treeMat)),
+      fallenSnowman: Array.from({ length: maxObstacles }, () => this.addProp(snowmanGeos[0], treeMat)),
+      snowHead: Array.from({ length: maxObstacles }, () => this.addProp(snowHeadGeos[0], treeMat)),
+      rockPiece: Array.from({ length: 40 }, () => this.addProp(ledgeGeos[0], rockMat)),
+    };
+    this.driftPool = Array.from({ length: maxObstacles }, () => this.addProp(driftGeo, treeMat));
+    this.baseRockPool = Array.from({ length: maxObstacles * 2 }, () => this.addProp(brownRockGeos[0], rockMat));
+    this.bankTrees = Array.from({ length: 2 * Math.max(...Object.values(BIOMES).map(b => b.bankTrees)) },
+      () => this.addProp(treeGeos[0], treeMat));
+    this.obstacles = [];
+    this.gems = [];
+  }
+
+  addProp(geo, mat) {
+    const m = new THREE.Mesh(geo, mat);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    m.visible = false;
+    this.group.add(m);
+    return m;
+  }
+
+  // Move this segment so its center sits at downhill position z, then rebuild it.
+  reset(z) {
+    this.z = z;
+    this.group.position.z = z;
+
+    const pos = this.ground.geometry.attributes.position;
+    const col = this.ground.geometry.attributes.color;
+    const c = new THREE.Color();
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      const wz = z + pos.getZ(i);
+      const cut = pitCut(x, wz);
+      pos.setY(i, snowHeight(x, wz) + cut);
+      // Shade the banks a touch bluer as they climb so the shape reads, and pits darker.
+      const t = smoothstep(HALF_W, HALF_W + 18, Math.abs(x));
+      c.setRGB(1 - 0.06 * t, 1 - 0.04 * t, 1);
+      if (cut < 0) c.lerp(stretchAt(-wz).pit.color, -cut / TRENCH_DEPTH);
+      col.setXYZ(i, c.r, c.g, c.b);
+    }
+    pos.needsUpdate = true;
+    col.needsUpdate = true;
+    this.ground.geometry.computeVertexNormals();
+
+    // The groomed run stops at the trench edge (it's tucked away under the trench floor).
+    const runPos = this.run.geometry.attributes.position;
+    for (let i = 0; i < runPos.count; i++) {
+      runPos.setY(i, pitCut(0, z + runPos.getZ(i)) < -0.01 ? -TRENCH_DEPTH - 1 : 0);
+    }
+    runPos.needsUpdate = true;
+
+    const biome = biomeAt(-(z + SEG_LEN / 2));
+    for (const m of this.rocks) {
+      const { layer, side, i } = m.userData;
+      const r = THREE.MathUtils.lerp(layer.rMin, layer.rMax, Math.random());
+      const lz = -SEG_LEN / 2 + (i + Math.random()) * (SEG_LEN / layer.count);
+      const x = side * (HALF_W + layer.out + r * 0.8 + Math.random() * 1.2);
+      m.geometry = pick(biome.wallGeos);
+      m.scale.set(r, r * (0.8 + Math.random() * 0.5), r);
+      m.rotation.set(0, Math.random() * Math.PI * 2, 0);
+      m.position.set(x, snowHeight(x, z + lz) - r * 0.25, lz);
+    }
+
+    this.placeObstacles();
+    this.placeBankTrees();
+  }
+
+  placeObstacles() {
+    const pools = Object.values(this.pools).flat();
+    for (const m of [...pools, ...this.baseRockPool, ...this.driftPool]) m.visible = false;
+    this.obstacles.length = 0;
+    this.gems.length = 0;
+    this.baseRocksUsed = 0;
+    this.driftsUsed = 0;
+    const used = Object.fromEntries(Object.keys(this.pools).map(k => [k, 0]));
+
+    const dist = -(this.z + SEG_LEN / 2); // distance at the top of this segment
+    // More obstacles the further down the mountain you get, shared out between the biomes this segment covers.
+    const extra = Math.min(EXTRA_OBSTACLES, Math.max(0, dist) / EXTRA_EVERY);
+    let count = 0;
+    for (let s = stretchAt(dist); s.start < dist + SEG_LEN; s = stretchAt(s.end)) {
+      const overlap = Math.min(dist + SEG_LEN, s.end) - Math.max(dist, s.start);
+      if (s.biome.obstaclesPerSeg) count += (s.biome.obstaclesPerSeg + extra) * overlap / SEG_LEN;
+    }
+    count = Math.round(count);
+    // Blocked stretches per strip, so there's always a way through.
+    const bands = Array.from({ length: Math.ceil(SEG_LEN / BAND) }, () => []);
+    const gemSpots = []; // awkward places a gem could go
+    for (let tries = 0, placed = 0; placed < count && tries < count * 25; tries++) {
+      const lz = (Math.random() - 0.5) * SEG_LEN;
+      const x = (Math.random() * 2 - 1) * (HALF_W - 1.2);
+      const wz = this.z + lz;
+      const biome = biomeAt(-wz);
+      if (!biome.obstaclesPerSeg || -wz < START_CLEAR || nearRollerRow(-wz)) continue;
+      const kind = pickKind(biome);
+      const type = OBSTACLES[kind];
+      const pool = type.pool ?? kind;
+      const size = type.size();
+      const pieces = size.pieces ?? [null];
+      if (used[pool] + pieces.length > this.pools[pool].length) continue;
+      const radius = type.radius(size);
+      const [ex, ez] = type.extent?.(size) ?? [radius, radius];
+      if (Math.abs(x) + ex > HALF_W - 0.5) continue;
+      if (this.obstacles.some(o => Math.hypot(o.x - x, o.z - wz) < Math.max(OBSTACLE_GAP, o.radius + radius))) continue;
+
+      const span = [x - ex - PLAYER_RADIUS, x + ex + PLAYER_RADIUS];
+      const b0 = Math.max(0, Math.floor((lz - ez + SEG_LEN / 2) / BAND));
+      const b1 = Math.min(bands.length - 1, Math.floor((lz + ez + SEG_LEN / 2) / BAND));
+      let open = true;
+      for (let b = b0; b <= b1 && open; b++) open = widestGap([...bands[b], span]) >= MIN_GAP;
+      if (!open) continue;
+      for (let b = b0; b <= b1; b++) bands[b].push(span);
+
+      placed++;
+      if (size.pieces) {
+        // A rock formation: each piece is its own rock to stand on or crash into.
+        const pieces = size.pieces.map(p => {
+          const m = this.pools[pool][used[pool]++];
+          m.visible = true;
+          const o = { mesh: m, kind, x: x + p.dx, z: wz + p.dz, radius: Math.hypot(p.w, p.d) / 2 };
+          this.setupLedge(o, m, lz + p.dz, p);
+          this.obstacles.push(o);
+          return o;
+        });
+        // Up on the highest rock, if there are lower ones to climb it from.
+        const peak = pieces.reduce((a, b) => (b.top > a.top ? b : a));
+        if (pieces.length > 1) gemSpots.push({ x: peak.x, y: peak.top + GEM_LIFT, z: peak.z });
+        continue;
+      }
+      const m = this.pools[pool][used[pool]++];
+      m.visible = true;
+      const o = { mesh: m, kind, x, z: wz, radius };
+      if (kind === 'tree') {
+        this.setupTree(o, m, lz, size);
+        // Tucked in by the trunk, so you have to duck under the branches for it.
+        const a = Math.random() * Math.PI * 2, r = o.trunkRadius + PLAYER_RADIUS + 0.25 + Math.random() * 0.2;
+        if (!o.rocky) gemSpots.push({ x: x + Math.cos(a) * r, y: GEM_LIFT, z: wz + Math.sin(a) * r });
+      }
+      else if (kind === 'rock') this.setupRock(o, m, lz, size);
+      else if (kind === 'snowman') this.setupSnowman(o, m, lz, size);
+      else if (kind === 'fallenSnowman') this.setupFallenSnowman(o, m, lz, size);
+      else this.setupSnowHead(o, m, lz, size);
+      this.obstacles.push(o);
+    }
+    if (gemSpots.length && Math.random() < GEM_CHANCE) this.gems.push({ ...pick(gemSpots), taken: false });
+  }
+
+  setupTree(o, m, lz, size) {
+    m.geometry = pick(treeGeos);
+    m.scale.setScalar(size);
+    m.rotation.set(0, Math.random() * Math.PI * 2, 0);
+    m.position.set(o.x, 0, lz);
+
+    // Some trees have rocks piled round the trunk, so there's no ducking under them.
+    o.rocky = Math.random() < ROCKY_TREE_CHANCE
+      && this.baseRocksUsed + ROCKS_PER_ROCKY_TREE <= this.baseRockPool.length;
+    if (o.rocky) {
+      const turn = Math.random() * Math.PI * 2;
+      for (let k = 0; k < ROCKS_PER_ROCKY_TREE; k++) {
+        const rock = this.baseRockPool[this.baseRocksUsed++];
+        const a = turn + (k / ROCKS_PER_ROCKY_TREE) * Math.PI * 2 + (Math.random() - 0.5) * 0.8;
+        const out = o.radius * (0.4 + Math.random() * 0.3);
+        const r = (0.32 + Math.random() * 0.15) * size;
+        rock.geometry = pick(brownRockGeos);
+        rock.scale.set(r, r * 0.75, r);
+        rock.rotation.set(0, Math.random() * Math.PI * 2, 0);
+        rock.position.set(o.x + Math.cos(a) * out, -r * 0.2, lz + Math.sin(a) * out);
+        rock.visible = true;
+      }
+    }
+
+    // Too tall to jump, but you can duck under the branches, just not through the trunk.
+    o.trunkRadius = 0.3 * size;
+    o.branchBottom = TREE_BRANCH_BOTTOM * size;
+  }
+
+  setupRock(o, m, lz, r) {
+    m.geometry = pick(brownRockGeos);
+    m.scale.set(r, r * 0.8, r);
+    m.rotation.set(0, Math.random() * Math.PI * 2, 0);
+    m.position.set(o.x, -r * 0.2, lz);
+    o.height = r * 0.95; // low enough to jump over
+  }
+
+  setupSnowman(o, m, lz, size) {
+    m.geometry = pick(snowmanGeos);
+    m.scale.setScalar(size);
+    m.rotation.set(0, (Math.random() - 0.5) * 0.8, 0); // roughly facing uphill
+    m.position.set(o.x, -0.05, lz);
+    o.height = SNOWMAN_HEIGHT * size * 0.92; // only the small ones are low enough to jump
+  }
+
+  setupFallenSnowman(o, m, lz, size) {
+    m.geometry = pick(snowmanGeos);
+    m.scale.setScalar(size);
+    const side = Math.random() < 0.5 ? -1 : 1; // which way it toppled
+    const yaw = (Math.random() - 0.5) * 0.6;
+    m.rotation.set(0, yaw, side * FALLEN.roll); // tipped over, still looking uphill
+    const shift = side * FALLEN.shift * size;
+    m.position.set(o.x + shift * Math.cos(yaw), FALLEN.lift * size - 0.05, lz - shift * Math.sin(yaw));
+    o.balls = FALLEN.balls.map(b => {
+      const along = side * (b.x + FALLEN.shift) * size;
+      return { x: o.x + along * Math.cos(yaw), z: o.z - along * Math.sin(yaw), radius: b.r * size, height: b.r * 2 * size * 0.92 };
+    });
+  }
+
+  // Ledges and pillars: an oval rock you can stand on top of.
+  // top/halfW/halfD/drift/driftHalfW are what groundAt() and hitObstacle() use.
+  setupLedge(o, m, lz, size) {
+    m.geometry = pick(ledgeGeos);
+    m.scale.set(size.w, size.h, size.d);
+    m.rotation.set(0, Math.random() < 0.5 ? 0 : Math.PI, 0);
+    m.position.set(o.x, 0, lz);
+    Object.assign(o, { top: size.h, halfW: size.w / 2, halfD: size.d / 2, drift: 0, driftHalfW: size.w * 0.18 });
+    if (size.drift && this.driftsUsed < this.driftPool.length) {
+      // Banked up from a little way into the rock, so it meets the top.
+      const d = this.driftPool[this.driftsUsed++];
+      d.scale.set(o.driftHalfW * 2, o.top, size.drift + o.halfD * DRIFT_INSET);
+      d.position.set(o.x, 0, lz + o.halfD * (1 - DRIFT_INSET));
+      d.visible = true;
+      o.drift = size.drift;
+    }
+  }
+
+  setupSnowHead(o, m, lz, size) {
+    m.geometry = pick(snowHeadGeos);
+    m.scale.setScalar(size);
+    m.rotation.set((Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.8, (Math.random() - 0.5) * 0.4);
+    m.position.set(o.x, -0.05, lz);
+    o.height = (SNOW_HEAD.y + SNOW_HEAD.r) * size * 0.92; // low enough to jump
+  }
+
+  // Decorative pines up on the banks behind the rock walls.
+  placeBankTrees() {
+    const biome = biomeAt(-(this.z + SEG_LEN / 2));
+    this.bankTrees.forEach((m, i) => {
+      m.visible = i < biome.bankTrees * 2;
+      if (!m.visible) return;
+      const side = i % 2 ? 1 : -1;
+      const x = side * (HALF_W + 8 + Math.random() * 22);
+      const lz = (Math.random() - 0.5) * SEG_LEN;
+      const cliff = cliffAt(-(this.z + lz));
+      if (cliff && Math.abs(x) < CLIFF_OUT + 4) { m.visible = false; return; } // would stick out of the rock wall
+      m.geometry = pick(treeGeos);
+      m.scale.setScalar(1.8 + Math.random() * 1.2);
+      m.rotation.set(0, Math.random() * Math.PI * 2, 0);
+      m.position.set(x, snowHeight(x, this.z + lz) - 0.3, lz);
+      m.castShadow = false;
+    });
+  }
+}
+
+// Returns the obstacle the skier is touching, if any.
+function hitObstacle() {
+  const top = player.y + SKIER_HEIGHT - DUCK_SHRINK * player.duck;
+  for (const s of segments) {
+    for (const o of s.obstacles) {
+      if (Math.abs(o.z - player.z) > 4 + (o.halfD ?? 0)) continue;
+      const d = Math.hypot(o.x - player.x, o.z - player.z);
+      if (o.top) {
+        // Rock: fine on top, deadly from the side.
+        const ex = (player.x - o.x) / (o.halfW + PLAYER_RADIUS), ez = (player.z - o.z) / (o.halfD + PLAYER_RADIUS);
+        if (ex * ex + ez * ez < 1 && player.y < o.top - STEP_UP) return o;
+      } else if (o.balls) {
+        // Fallen snowman: check the body and the head on their own.
+        const ball = o.balls.find(b => player.y < b.height && Math.hypot(b.x - player.x, b.z - player.z) < b.radius + PLAYER_RADIUS);
+        if (ball) return o;
+      } else if (o.kind === 'tree') {
+        if (d < o.trunkRadius + PLAYER_RADIUS) return o;
+        if (d < o.radius + PLAYER_RADIUS && (o.rocky || top > o.branchBottom)) return o; // rocks underneath, or didn't duck low enough
+      } else if (player.y < o.height && d < o.radius + PLAYER_RADIUS) {
+        return o; // didn't jump high enough
+      }
+    }
+  }
+  for (const o of rollers) {
+    if (player.y < o.height && Math.hypot(o.x - player.x, o.z - player.z) < o.radius + PLAYER_RADIUS) return o;
+  }
+  return null;
+}
+
+const segments = Array.from({ length: NUM_SEGS }, () => new Segment());
+
+// The rolling snowballs: one shared set of meshes, moved to whichever rows are near the player.
+const rollerGeos = Array.from({ length: 4 }, () => lumpyBall(ROLLER_RADIUS));
+const rollerMeshes = Array.from({ length: 2 * ROLLER_ROWS.length * ROLLERS_PER_ROW }, () => {
+  const m = new THREE.Mesh(pick(rollerGeos), treeMat);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  m.visible = false;
+  course.add(m);
+  return m;
+});
+const rollers = []; // the ones out on the slope right now, for collisions
+let rollTime = 0;
+
+// The trench ramp: a snow kicker with wooden sides and a flag on each corner of the lip.
+function makeRampGeometry() {
+  const wedge = new THREE.BoxGeometry(RAMP_W, RAMP_H, RAMP_LEN).toNonIndexed();
+  wedge.translate(0, RAMP_H / 2, RAMP_LEN / 2); // lip at z = 0, run-in uphill at +z
+  const p = wedge.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    if (p.getZ(i) > 0 && p.getY(i) > 0) p.setY(i, 0.02); // slope down to the snow at the back
+  }
+  wedge.deleteAttribute('normal');
+  wedge.computeVertexNormals();
+  const n = wedge.attributes.normal;
+  const parts = [colorFaces(wedge, () => SNOWBALL_WHITES[0])];
+  const colors = wedge.attributes.color;
+  for (let i = 0; i < n.count; i++) {
+    if (n.getY(i) < 0.5) colors.setXYZ(i, ...RAMP_WOOD.toArray()); // the sides
+  }
+  wedge.deleteAttribute('normal');
+  for (const side of [-1, 1]) {
+    const x = side * (RAMP_W / 2 + 0.2);
+    parts.push(stick(new THREE.Vector3(x, 0, 0), new THREE.Vector3(x, 3, 0), 0.05, STICK));
+    const flag = part(new THREE.BoxGeometry(0.7, 0.45, 0.04), () => RAMP_FLAG);
+    flag.translate(x - side * 0.4, 2.75, 0);
+    parts.push(flag);
+  }
+  const g = mergeGeometries(parts);
+  g.computeVertexNormals();
+  return g;
+}
+const ramp = new THREE.Mesh(makeRampGeometry(), treeMat);
+ramp.castShadow = true;
+ramp.receiveShadow = true;
+course.add(ramp);
+// Chasm stones: rough rock pillars standing up out of the drop, flat snow on top at the level of the run.
+// Radius 1 (scaled to each stone's size), top at y = 0.
+function makeStoneGeometry() {
+  const rock = new THREE.CylinderGeometry(1, 1.1, TRENCH_DEPTH + 1, 10, 4).toNonIndexed();
+  rock.translate(0, -(TRENCH_DEPTH + 1) / 2 - 0.3, 0);
+  const p = rock.attributes.position;
+  const kick = Array.from({ length: 64 }, () => 0.82 + Math.random() * 0.16);
+  for (let i = 0; i < p.count; i++) {
+    const a = Math.round((Math.atan2(p.getZ(i), p.getX(i)) + Math.PI) / (Math.PI * 2) * 10) % 10; // same push for shared corners
+    const k = kick[(a + Math.round(-p.getY(i)) * 7) % 64];
+    p.setXYZ(i, p.getX(i) * k, p.getY(i), p.getZ(i) * k);
+  }
+  const tone = pick(BROWN_TONES);
+  const sides = colorFaces(rock, () => tone.clone().multiplyScalar(0.7 + Math.random() * 0.45));
+  sides.deleteAttribute('normal');
+
+  const cap = new THREE.CylinderGeometry(1, 0.95, 0.4, 12, 1);
+  const c = cap.attributes.position;
+  // Lumpy edge, the same for every copy of a corner so the snow has no cracks.
+  const lump = Array.from({ length: 12 }, () => ({ k: 0.95 + Math.random() * 0.06, drop: Math.random() * 0.15 }));
+  for (let i = 0; i < c.count; i++) {
+    if (Math.abs(c.getX(i)) + Math.abs(c.getZ(i)) < 1e-6) continue; // centre of the top
+    const { k, drop } = lump[Math.round((Math.atan2(c.getZ(i), c.getX(i)) + Math.PI) / (Math.PI * 2) * 12) % 12];
+    c.setXYZ(i, c.getX(i) * k, c.getY(i) > 0 ? c.getY(i) : c.getY(i) - drop, c.getZ(i) * k);
+  }
+  cap.translate(0, -0.2, 0);
+  const snow = part(cap, () => pick(SNOWBALL_WHITES));
+
+  const g = mergeGeometries([sides, snow]);
+  g.computeVertexNormals();
+  return g;
+}
+const stoneGeos = Array.from({ length: 5 }, makeStoneGeometry);
+const stoneMeshes = Array.from({ length: 64 }, () => {
+  const m = new THREE.Mesh(pick(stoneGeos), rockMat);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  m.visible = false;
+  course.add(m);
+  return m;
+});
+function placeStones() {
+  const here = stretchAt(-player.z);
+  const stones = here.pit?.stones ?? stretchAt(here.end).pit?.stones ?? [];
+  stoneMeshes.forEach((m, i) => {
+    const st = stones[i];
+    m.visible = !!st;
+    if (st) {
+      m.scale.set(st.rx, 1, st.rd);
+      m.position.set(st.x, 0, -st.d);
+    }
+  });
+}
+
+// The rock wall: two chopped gray blocks either side of the passage, built fresh for each one.
+const CLIFF_CHOP = 0.7; // how deep the faces are hacked in (never out into the run)
+// y0: the bottom of the block (buried in the snow, or the tunnel ceiling for the roof).
+function makeCliffBlock(x0, x1, y0 = -1) {
+  const w = x1 - x0, h = CLIFF_H - y0, len = CLIFF_THICK;
+  let g = new THREE.BoxGeometry(w, h, len, Math.max(1, Math.ceil(w / 1.6)), 6, Math.ceil(len / 1.6));
+  g.deleteAttribute('normal');
+  g.deleteAttribute('uv');
+  g = mergeVertices(g);
+  const p = g.attributes.position;
+  const crag = Math.random() * 10;
+  for (let i = 0; i < p.count; i++) {
+    let x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const onX = Math.abs(Math.abs(x) - w / 2) < 1e-4, onZ = Math.abs(Math.abs(z) - len / 2) < 1e-4;
+    x = onX ? x - Math.sign(x) * Math.random() * CLIFF_CHOP : x + (Math.random() - 0.5) * CLIFF_CHOP;
+    z = onZ ? z - Math.sign(z) * Math.random() * CLIFF_CHOP : z + (Math.random() - 0.5) * CLIFF_CHOP;
+    if (y > h / 2 - 1e-4) y += Math.random() * 1.2 + 0.9 * (Math.sin((x0 + x) * 0.4 + crag) + 1); // jagged crags on top
+    else if (y > -h / 2 + 1e-4) y += (Math.random() - 0.5) * CLIFF_CHOP;
+    else if (y0 > 0) y += Math.random() * CLIFF_CHOP; // rough tunnel ceiling, never lower than TUNNEL_H
+    p.setXYZ(i, x, y, z);
+  }
+  g = g.toNonIndexed();
+  g.translate((x0 + x1) / 2, y0 + h / 2, -len / 2);
+  g.computeVertexNormals();
+  const n = g.attributes.normal;
+  const colors = new Float32Array(n.count * 3);
+  const col = new THREE.Color();
+  for (let f = 0; f < n.count; f += 3) {
+    const ny = (n.getY(f) + n.getY(f + 1) + n.getY(f + 2)) / 3;
+    if (ny > 0.35 + Math.random() * 0.2) col.copy(pick(SNOWBALL_WHITES));
+    else col.copy(pick(ROCK_TONES)).multiplyScalar(0.8 + Math.random() * 0.35);
+    for (let k = 0; k < 3; k++) col.toArray(colors, (f + k) * 3);
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  return g;
+}
+const cliffMesh = new THREE.Mesh(new THREE.BufferGeometry(), rockMat);
+cliffMesh.castShadow = true;
+cliffMesh.receiveShadow = true;
+course.add(cliffMesh);
+function placeCliff() {
+  const here = stretchAt(-player.z);
+  const c = here.cliff ?? stretchAt(here.end).cliff;
+  cliffMesh.visible = !!c;
+  if (!c || cliffMesh.userData.cliff === c) return;
+  cliffMesh.userData.cliff = c;
+  cliffMesh.geometry.dispose();
+  cliffMesh.geometry = mergeGeometries([
+    makeCliffBlock(-CLIFF_OUT, c.x - PASSAGE_W / 2),
+    makeCliffBlock(c.x + PASSAGE_W / 2, CLIFF_OUT),
+    makeCliffBlock(c.x - PASSAGE_W / 2 - 1, c.x + PASSAGE_W / 2 + 1, TUNNEL_H), // the roof over the passage
+  ]);
+  cliffMesh.position.set(0, 0, -c.from);
+}
+
+// Gems: one shared set of spinning crystals, moved to whichever gems are near the player.
+const gemGeo = new THREE.OctahedronGeometry(0.32, 0);
+gemGeo.scale(1, 1.45, 1);
+const gemMat = new THREE.MeshStandardMaterial({
+  color: '#38cfff', emissive: '#1577d6', emissiveIntensity: 0.55, flatShading: true, roughness: 0.2, metalness: 0.1,
+});
+const gemMeshes = Array.from({ length: 32 }, () => {
+  const m = new THREE.Mesh(gemGeo, gemMat);
+  m.castShadow = true;
+  m.visible = false;
+  course.add(m);
+  return m;
+});
+function updateGems(t) {
+  const here = stretchAt(-player.z);
+  const all = [...segments.flatMap(s => s.gems), ...(here.gems ?? []), ...(stretchAt(here.end).gems ?? [])];
+  const top = player.y + SKIER_HEIGHT - DUCK_SHRINK * player.duck;
+  let used = 0;
+  for (const g of all) {
+    if (g.taken) continue;
+    if (state === 'playing' && Math.hypot(g.x - player.x, g.z - player.z) < GEM_REACH && g.y > player.y - 0.4 && g.y < top + 0.2) {
+      g.taken = true;
+      collectGem(g);
+      continue;
+    }
+    const m = gemMeshes[used++];
+    if (!m) break;
+    m.visible = true;
+    m.position.set(g.x, g.y + Math.sin(t * 2.5 + g.x) * 0.1, g.z);
+    m.rotation.y = t * 2 + g.z;
+  }
+  for (let i = used; i < gemMeshes.length; i++) gemMeshes[i].visible = false;
+}
+function collectGem(g) {
+  gems++;
+  player.gems++;
+  try { localStorage.setItem('powderRun.gems', gems); } catch {}
+  ui.gems.textContent = gems;
+  renderSkins();
+  ui.gemsChip.classList.remove('bump');
+  void ui.gemsChip.offsetWidth;
+  ui.gemsChip.classList.add('bump');
+  emitSpray(g.x, g.z, -1, 2, 25);
+  emitSpray(g.x, g.z, 1, 2, 25);
+}
+
+function placeRamp() {
+  const here = stretchAt(-player.z);
+  const t = here.trench ?? stretchAt(here.end).trench;
+  ramp.visible = !!t;
+  if (t) ramp.position.set(t.x, 0, -t.lip);
+}
+function updateRollers(dt) {
+  rollTime += dt;
+  rollers.length = 0;
+  const here = stretchAt(-player.z);
+  const span = ROLLER_REACH * 2;
+  let used = 0;
+  for (const stretch of [here, stretchAt(here.end)]) {
+    for (const row of stretch.rollers ?? []) {
+      for (let k = 0; k < ROLLERS_PER_ROW; k++) {
+        const along = THREE.MathUtils.euclideanModulo(row.phase + k * span / ROLLERS_PER_ROW + row.dir * row.speed * rollTime, span);
+        const x = along - ROLLER_REACH;
+        const m = rollerMeshes[used++];
+        m.visible = true;
+        m.position.set(x, ROLLER_RADIUS * 0.95, -row.dist);
+        m.rotation.set(0, 0, -x / ROLLER_RADIUS); // rolling, not sliding
+        rollers.push({ mesh: m, kind: 'snowball', x, z: -row.dist, radius: ROLLER_RADIUS, height: ROLLER_RADIUS * 2 * 0.92 });
+      }
+    }
+  }
+  for (let i = used; i < rollerMeshes.length; i++) rollerMeshes[i].visible = false;
+}
+function layoutSegments() {
+  segments.forEach((s, i) => s.reset(20 - SEG_LEN / 2 - i * SEG_LEN));
+}
+layoutSegments();
+
+function recycleSegments(playerZ) {
+  for (const s of segments) {
+    if (s.z - SEG_LEN / 2 > playerZ + 30) {
+      s.reset(s.z - NUM_SEGS * SEG_LEN);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Start gate
+// ---------------------------------------------------------------------------
+function makeStartGate() {
+  const gate = new THREE.Group();
+  const poleMat = new THREE.MeshStandardMaterial({ color: '#13243a', roughness: 0.6 });
+  for (const side of [-1, 1]) {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 6.7, 10), poleMat);
+    pole.position.set(side * (HALF_W - 0.6), 3.35, 0);
+    pole.castShadow = true;
+    gate.add(pole);
+  }
+  const banner = new THREE.Mesh(
+    new THREE.PlaneGeometry(HALF_W * 2 - 1.2, 2.2),
+    new THREE.MeshStandardMaterial({ map: makeBannerTexture('START', (HALF_W * 2 - 1.2) / 2.2), side: THREE.DoubleSide, roughness: 0.7 })
+  );
+  banner.position.set(0, 5.6, 0);
+  banner.castShadow = true;
+  gate.add(banner);
+  gate.position.z = -6;
+  return gate;
+}
+course.add(makeStartGate());
+
+// ---------------------------------------------------------------------------
+// Distant mountains (always sit on the horizon ahead of the camera)
+// ---------------------------------------------------------------------------
+function makeMountains() {
+  const group = new THREE.Group();
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, fog: false });
+  const low = new THREE.Color('#8fa6c2');
+  const high = new THREE.Color('#f3f7fc');
+  for (let i = 0; i < 16; i++) {
+    const h = 90 + Math.random() * 130;
+    const r = 70 + Math.random() * 90;
+    let g = new THREE.ConeGeometry(r, h, 7 + Math.floor(Math.random() * 4), 4);
+    g = g.toNonIndexed();
+    const p = g.attributes.position;
+    const colors = new Float32Array(p.count * 3);
+    const c = new THREE.Color();
+    for (let k = 0; k < p.count; k++) {
+      // Rough up the silhouette a little.
+      const y = p.getY(k);
+      if (y < h / 2 - 1) p.setX(k, p.getX(k) * (0.9 + Math.random() * 0.2));
+      const t = (y + h / 2) / h;
+      c.copy(low).lerp(high, smoothstep(0.35, 0.6, t));
+      c.toArray(colors, k * 3);
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    g.computeVertexNormals();
+    const m = new THREE.Mesh(g, mat);
+    const ang = THREE.MathUtils.lerp(-1.25, 1.25, i / 15) + (Math.random() - 0.5) * 0.15;
+    const dist = 520 + Math.random() * 220;
+    m.position.set(Math.sin(ang) * dist, h / 2 - 150, -Math.cos(ang) * dist);
+    group.add(m);
+  }
+  return group;
+}
+const mountains = makeMountains();
+scene.add(mountains);
+
+// ---------------------------------------------------------------------------
+// Skier models: the full skier (third person) and just your skis (first person)
+// ---------------------------------------------------------------------------
+function limb(a, b, radius, mat) {
+  const dir = new THREE.Vector3().subVectors(b, a);
+  const len = dir.length();
+  const m = new THREE.Mesh(new THREE.CapsuleGeometry(radius, Math.max(0.001, len - radius * 2), 4, 10), mat);
+  m.position.copy(a).add(b).multiplyScalar(0.5);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+  m.castShadow = true;
+  return m;
+}
+
+const gearMat = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6 });
+const skiMat = gearMat('#e8323c');
+const stripeMat = gearMat('#ffffff');
+
+function makeSki() {
+  const ski = new THREE.Group();
+  const plank = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.04, 1.8), skiMat);
+  const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.045, 1.5), stripeMat);
+  stripe.position.z = -0.1;
+  const tip = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.04, 0.3), skiMat);
+  tip.position.set(0, 0.06, -1.02);
+  tip.rotation.x = 0.45;
+  for (const m of [plank, stripe, tip]) { m.castShadow = true; ski.add(m); }
+  return ski;
+}
+
+// The snowboard skin: one board, ridden sideways with the left foot forward.
+const STANCE = 1.3;       // how far the rider turns side-on
+const HEAD_TURN = 0.9;    // ...while still looking down the hill
+const boardMat = gearMat('#7b3fe4');
+const boardStripeMat = gearMat('#ffd23f');
+function makeBoard(boots) {
+  const board = new THREE.Group();
+  const deck = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, 1.25, 4, 12), boardMat);
+  deck.rotation.x = Math.PI / 2;
+  deck.scale.set(1, 1, 0.13); // flatten the capsule into a board with rounded nose and tail
+  deck.position.y = 0.03;
+  const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.012, 1.2), boardStripeMat);
+  stripe.position.y = 0.052;
+  board.add(deck, stripe);
+  for (const z of [-0.2, 0.2]) {
+    const binding = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.05, 0.14), boots);
+    binding.position.set(0, 0.07, z);
+    binding.rotation.y = 0.25;
+    board.add(binding);
+  }
+  board.traverse(m => { m.castShadow = true; });
+  board.visible = false;
+  return board;
+}
+
+// The snowmobile skin: you sit on it with your hands on the bars, legs tucked inside the hull.
+const SLED_PAINT = '#e63b2e';
+function makeSnowmobile() {
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  const flat = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.5, flatShading: true });
+  const paint = flat(SLED_PAINT), black = flat('#1b1f27'), white = flat('#f2f2ee'), metal = gearMat('#9aa3ad');
+  const sled = new THREE.Group();
+
+  // Hull: side profiles (forward, up) pushed out sideways; a wide hood up front, a slim tunnel under the seat.
+  const hull = (points, width) => {
+    const geo = new THREE.ExtrudeGeometry(new THREE.Shape(points.map(([f, y]) => new THREE.Vector2(f, y))),
+      { depth: width, bevelEnabled: false });
+    geo.translate(0, 0, -width / 2);
+    geo.rotateY(Math.PI / 2); // forward ends up along -z
+    return new THREE.Mesh(geo, paint);
+  };
+  sled.add(hull([[0.1, 0.28], [1.2, 0.3], [1.42, 0.48], [0.75, 0.82], [0.45, 0.86], [0.1, 0.72]], 0.8));
+  sled.add(hull([[-1.0, 0.28], [0.1, 0.28], [0.1, 0.66], [-0.95, 0.66], [-1.0, 0.45]], 0.5));
+  const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.06, 0.9), white);
+  stripe.position.set(0, 0.5, -0.55);
+  sled.add(stripe);
+
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.16, 0.85), black);
+  seat.position.set(0, 0.8, 0.3);
+  const windshield = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.34, 0.03),
+    new THREE.MeshStandardMaterial({ color: '#2b4a6b', roughness: 0.1, metalness: 0.3, transparent: true, opacity: 0.6 }));
+  windshield.position.set(0, 1.0, -0.52);
+  windshield.rotation.x = -0.5;
+  const light = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.08, 0.05),
+    new THREE.MeshStandardMaterial({ color: '#fff6c8', emissive: '#ffe27a', emissiveIntensity: 0.8 }));
+  light.position.set(0, 0.62, -1.17);
+  light.rotation.x = -0.45;
+  sled.add(seat, windshield, light);
+
+  // Handlebars right where the skier's hands are.
+  sled.add(limb(V(0, 0.84, -0.36), V(0, 1.0, -0.46), 0.03, black));
+  sled.add(limb(V(-0.36, 1.0, -0.47), V(0.36, 1.0, -0.47), 0.025, black));
+
+  // The track underneath, with lugs, and a ski out front on each side.
+  const track = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.26, 1.3), black);
+  track.position.set(0, 0.18, 0.3);
+  sled.add(track);
+  for (let k = 0; k < 7; k++) {
+    const lug = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.04, 0.06), metal);
+    lug.position.set(0, 0.05, -0.28 + k * 0.19);
+    sled.add(lug);
+  }
+  for (const side of [-1, 1]) {
+    const ski = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.04, 0.85), black);
+    ski.position.set(side * 0.38, 0.03, -1.15);
+    const tip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.04, 0.22), black);
+    tip.position.set(side * 0.38, 0.1, -1.62);
+    tip.rotation.x = 0.6;
+    sled.add(ski, tip, limb(V(side * 0.38, 0.05, -1.1), V(side * 0.3, 0.38, -1.0), 0.03, metal));
+  }
+  sled.traverse(m => { m.castShadow = true; });
+  sled.visible = false;
+  return sled;
+}
+
+function makeSkier() {
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  const bootMat = gearMat('#1b1f27');
+  const pantsMat = gearMat('#1d3557');
+  const jacketMat = gearMat('#16b3a6');
+  const skinMat = gearMat('#f1c7a5');
+  const helmetMat = gearMat('#ffffff');
+  const poleMat = gearMat('#9aa3ad');
+  const goggleMat = new THREE.MeshStandardMaterial({ color: '#ff8a2a', emissive: '#ff6a00', emissiveIntensity: 0.35, metalness: 0.4, roughness: 0.2 });
+
+  const root = new THREE.Group();
+  root.rotation.order = 'YXZ';
+
+  const skis = [], poles = [];
+  for (const side of [-1, 1]) {
+    const ski = makeSki();
+    skis.push(ski);
+    ski.position.set(side * 0.17, 0.02, 0);
+    const boot = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.2, 0.32), bootMat);
+    boot.position.set(0, 0.11, 0.02);
+    boot.castShadow = true;
+    ski.add(boot);
+    root.add(ski);
+  }
+
+  // Everything above the boots squashes a little on landing.
+  const body = new THREE.Group();
+  root.add(body);
+  for (const side of [-1, 1]) {
+    const ankle = V(side * 0.17, 0.2, 0.03);
+    const knee = V(side * 0.18, 0.56, -0.2);
+    const hip = V(side * 0.13, 0.93, 0.08);
+    body.add(limb(ankle, knee, 0.08, pantsMat));
+    body.add(limb(knee, hip, 0.09, pantsMat));
+
+    const shoulder = V(side * 0.22, 1.38, -0.1);
+    const elbow = V(side * 0.31, 1.13, -0.26);
+    const hand = V(side * 0.31, 1.0, -0.48);
+    body.add(limb(shoulder, elbow, 0.07, jacketMat));
+    body.add(limb(elbow, hand, 0.065, jacketMat));
+    const glove = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), bootMat);
+    glove.position.copy(hand);
+    body.add(glove);
+
+    const poleTip = V(side * 0.42, 0.06, 0.55);
+    const pole = limb(hand, poleTip, 0.016, poleMat);
+    poles.push(pole);
+    body.add(pole);
+  }
+  body.add(limb(V(0, 0.92, 0.08), V(0, 1.42, -0.12), 0.2, jacketMat));
+
+  const head = new THREE.Group();
+  head.position.set(0, 1.62, -0.2);
+  const face = new THREE.Mesh(new THREE.SphereGeometry(0.13, 16, 12), skinMat);
+  const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), helmetMat);
+  helmet.position.y = 0.02;
+  const goggles = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.08, 0.08), goggleMat);
+  goggles.position.set(0, 0.02, -0.11);
+  for (const m of [face, helmet, goggles]) { m.castShadow = true; head.add(m); }
+  body.add(head);
+
+  const board = makeBoard(bootMat);
+  const sled = makeSnowmobile();
+  root.add(board, sled);
+
+  course.add(root);
+  return { root, body, head, skis, poles, board, sled };
+}
+
+// First person: only the ski tips (or the board) poking into the bottom of the view.
+function makeViewModel() {
+  const root = new THREE.Group();
+  scene.add(camera);
+  camera.add(root);
+  const skis = new THREE.Group();
+  skis.position.set(0, -1.45, -1.3);
+  root.add(skis);
+  const pair = [-1, 1].map(side => {
+    const ski = makeSki();
+    ski.position.x = side * 0.2;
+    ski.traverse(m => { m.castShadow = false; });
+    skis.add(ski);
+    return ski;
+  });
+  const board = makeBoard(gearMat('#1b1f27'));
+  board.position.z = -0.45; // far enough out to show at the bottom of the view
+  board.traverse(m => { m.castShadow = false; });
+  skis.add(board);
+  // The snowmobile, pushed out a little in front of you so the hood and bars show at the bottom.
+  const sled = makeSnowmobile();
+  sled.position.set(0, -0.2, 0.6);
+  sled.traverse(m => { m.castShadow = false; });
+  skis.add(sled);
+  return { root, skis, pair, board, sled };
+}
+
+const skier = makeSkier();
+const viewModel = makeViewModel();
+
+// The dog sled skin: three huskies out front, two side by side and a lead dog, roped to your hands.
+const DOG_FUR = ['#5d6672', '#8a7a68', '#3f444c'];
+const DOG_SPOTS = [[-0.38, -3.1], [0.38, -3.1], [0, -4.85]]; // x, z of each dog, ahead of the skier
+function makeDog(fur) {
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  const furMat = gearMat(fur), white = gearMat('#f2f2ee'), dark = gearMat('#1b1f27');
+  const root = new THREE.Group();
+  const body = new THREE.Group();
+  root.add(body);
+  body.add(limb(V(0, 0.52, 0.3), V(0, 0.56, -0.25), 0.17, furMat));
+  body.add(limb(V(0, 0.47, -0.1), V(0, 0.5, -0.3), 0.13, white)); // chest
+  body.add(limb(V(0, 0.6, -0.3), V(0, 0.76, -0.4), 0.09, furMat)); // neck
+  body.add(limb(V(0, 0.62, 0.4), V(0, 0.84, 0.5), 0.045, furMat)); // tail, curled up
+  const harness = new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.03, 6, 14), gearMat('#e8323c'));
+  harness.position.set(0, 0.54, -0.12);
+  body.add(harness);
+
+  const head = new THREE.Group();
+  head.position.set(0, 0.8, -0.44);
+  head.add(new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 10), furMat));
+  head.add(limb(V(0, -0.03, -0.06), V(0, -0.05, -0.22), 0.055, white)); // snout
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), dark);
+  nose.position.set(0, -0.04, -0.27);
+  head.add(nose);
+  for (const side of [-1, 1]) {
+    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.13, 4), furMat);
+    ear.position.set(side * 0.07, 0.13, 0.01);
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.02, 6, 4), dark);
+    eye.position.set(side * 0.05, 0.03, -0.11);
+    head.add(ear, eye);
+  }
+  body.add(head);
+
+  // Legs swing from the hip and shoulder.
+  const legs = [[-0.1, -0.22], [0.1, -0.22], [-0.1, 0.3], [0.1, 0.3]].map(([x, z]) => {
+    const leg = new THREE.Group();
+    leg.position.set(x, 0.46, z);
+    leg.add(limb(V(0, 0, 0), V(0, -0.42, 0), 0.045, furMat));
+    const paw = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), white);
+    paw.position.y = -0.42;
+    leg.add(paw);
+    root.add(leg);
+    return leg;
+  });
+  root.traverse(m => { m.castShadow = true; });
+  return { root, body, legs };
+}
+const dogTeam = (() => {
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  const root = new THREE.Group();
+  const dogs = DOG_SPOTS.map(([x, z], i) => {
+    const dog = makeDog(DOG_FUR[i]);
+    dog.root.position.set(x, 0, z);
+    root.add(dog.root);
+    return dog;
+  });
+  // Tow ropes: from both hands to a towbar, out to where the pair are hitched, and on to the lead dog.
+  const ropeMat = gearMat('#3a2a1c');
+  const towbar = V(0, 0.75, -1.2), split = V(0, 0.5, -2.55);
+  const ropes = new THREE.Group();
+  for (const side of [-1, 1]) ropes.add(limb(V(side * 0.31, 1.0, -0.48), towbar, 0.012, ropeMat));
+  ropes.add(limb(towbar, split, 0.014, ropeMat));
+  for (const [x, z] of DOG_SPOTS) ropes.add(limb(split, V(x * 0.8, 0.52, z + 0.4), 0.012, ropeMat));
+  root.add(ropes);
+  course.add(root);
+  return { root, dogs, ropes, phase: 0, loose: false, runSpeed: 0 };
+})();
+
+function updateDogs(dt) {
+  const team = dogTeam;
+  team.root.visible = skin === 'dogSled';
+  if (!team.root.visible) return;
+  const crashed = state === 'crashed' || state === 'over';
+  if (crashed && !team.loose) {
+    // You wipe out, they break loose and carry on down the mountain.
+    team.loose = true;
+    team.runSpeed = levelKmh(player.points) / 3.6;
+  } else if (!crashed) team.loose = false;
+  team.ropes.visible = !team.loose;
+
+  let speed = 0;
+  const r = team.root;
+  if (team.loose) {
+    team.runSpeed *= Math.exp(-dt * 0.6);
+    speed = team.runSpeed;
+    r.position.x = THREE.MathUtils.clamp(r.position.x - Math.sin(r.rotation.y) * speed * dt, -WALL_LIMIT, WALL_LIMIT);
+    r.position.z -= Math.cos(r.rotation.y) * speed * dt;
+    r.position.y += (0 - r.position.y) * Math.min(1, dt * 4);
+  } else {
+    r.position.set(player.x, player.y, player.z);
+    r.rotation.y = player.yaw;
+    if (state === 'playing') speed = player.speed;
+  }
+
+  // Galloping: front legs together, back legs together, a little out of step with each other.
+  const stride = Math.min(1, speed / 5);
+  team.phase += dt * (4 + speed * 0.35) * (speed > 0.3 ? 1 : 0);
+  team.dogs.forEach((dog, i) => {
+    const p = team.phase + i * 0.9;
+    const swing = [p, p + 0.4, p + Math.PI, p + Math.PI + 0.4];
+    dog.legs.forEach((leg, k) => { leg.rotation.x = Math.sin(swing[k]) * 0.8 * stride; });
+    dog.body.position.y = Math.abs(Math.sin(p)) * 0.07 * stride;
+    dog.body.rotation.x = Math.sin(p) * 0.06 * stride;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Snow spray from the ski edges (thrown forward so you can see it)
+// ---------------------------------------------------------------------------
+const dotTex = makeDotTexture();
+const SPRAY_N = 600;
+const spray = {
+  pos: new Float32Array(SPRAY_N * 3).fill(-1000),
+  vel: new Float32Array(SPRAY_N * 3),
+  life: new Float32Array(SPRAY_N),
+  next: 0,
+  carry: 0,
+};
+const sprayGeo = new THREE.BufferGeometry();
+sprayGeo.setAttribute('position', new THREE.BufferAttribute(spray.pos, 3));
+const sprayPoints = new THREE.Points(sprayGeo, new THREE.PointsMaterial({
+  map: dotTex, size: 0.22, transparent: true, opacity: 0.9, depthWrite: false, color: '#ffffff',
+}));
+sprayPoints.frustumCulled = false;
+course.add(sprayPoints);
+
+// Thrown from the ski tips along the way you're facing; side is -1/+1 for
+// left/right of your skis.
+function emitSpray(x, z, side, speed, count) {
+  const fx = Math.sin(player.heading), fz = -Math.cos(player.heading); // forward
+  const rx = -fz, rz = fx;                                             // right
+  for (let n = 0; n < count; n++) {
+    const i = spray.next;
+    spray.next = (spray.next + 1) % SPRAY_N;
+    const ahead = 1.2 + Math.random() * 0.6;
+    const across = (Math.random() - 0.5) * 0.5;
+    spray.pos[i * 3] = x + fx * ahead + rx * across;
+    spray.pos[i * 3 + 1] = player.ground + 0.1;
+    spray.pos[i * 3 + 2] = z + fz * ahead + rz * across;
+    const out = side * (1.5 + Math.random() * 4) + (Math.random() - 0.5);
+    const fwd = speed * (0.8 + Math.random() * 0.25);
+    spray.vel[i * 3] = fx * fwd + rx * out;
+    spray.vel[i * 3 + 1] = 1.2 + Math.random() * 3;
+    spray.vel[i * 3 + 2] = fz * fwd + rz * out;
+    spray.life[i] = 0.4 + Math.random() * 0.5;
+  }
+}
+
+function updateSpray(dt) {
+  for (let i = 0; i < SPRAY_N; i++) {
+    if (spray.life[i] <= 0) continue;
+    spray.life[i] -= dt;
+    if (spray.life[i] <= 0) { spray.pos[i * 3 + 1] = -1000; continue; }
+    spray.vel[i * 3 + 1] -= 12 * dt;
+    spray.pos[i * 3] += spray.vel[i * 3] * dt;
+    spray.pos[i * 3 + 1] = Math.max(0.03, spray.pos[i * 3 + 1] + spray.vel[i * 3 + 1] * dt);
+    spray.pos[i * 3 + 2] += spray.vel[i * 3 + 2] * dt;
+  }
+  sprayGeo.attributes.position.needsUpdate = true;
+}
+
+// ---------------------------------------------------------------------------
+// Falling snow around the camera
+// ---------------------------------------------------------------------------
+const FLAKES = 900;
+const FLAKE_BOX = new THREE.Vector3(70, 34, 90);
+const flakePos = new Float32Array(FLAKES * 3);
+for (let i = 0; i < FLAKES; i++) {
+  flakePos[i * 3] = (Math.random() - 0.5) * FLAKE_BOX.x;
+  flakePos[i * 3 + 1] = (Math.random() - 0.5) * FLAKE_BOX.y;
+  flakePos[i * 3 + 2] = (Math.random() - 0.5) * FLAKE_BOX.z;
+}
+const flakeGeo = new THREE.BufferGeometry();
+flakeGeo.setAttribute('position', new THREE.BufferAttribute(flakePos, 3));
+const flakes = new THREE.Points(flakeGeo, new THREE.PointsMaterial({
+  map: dotTex, size: 0.16, transparent: true, opacity: 0.85, depthWrite: false,
+}));
+flakes.frustumCulled = false;
+scene.add(flakes);
+
+function updateFlakes(dt, t) {
+  const d = new THREE.Vector3().subVectors(camera.position, lastCamPos);
+  lastCamPos.copy(camera.position);
+  if (d.lengthSq() > 400) d.set(0, 0, 0); // teleported (restart)
+  const wrap = (v, size) => ((v + size / 2) % size + size) % size - size / 2;
+  for (let i = 0; i < FLAKES; i++) {
+    const k = i * 3;
+    flakePos[k] = wrap(flakePos[k] - d.x + Math.sin(t * 0.7 + i) * 0.4 * dt, FLAKE_BOX.x);
+    flakePos[k + 1] = wrap(flakePos[k + 1] - d.y - (1.2 + (i % 7) * 0.15) * dt, FLAKE_BOX.y);
+    flakePos[k + 2] = wrap(flakePos[k + 2] - d.z, FLAKE_BOX.z);
+  }
+  flakeGeo.attributes.position.needsUpdate = true;
+  flakes.position.copy(camera.position);
+  flakes.position.z -= FLAKE_BOX.z * 0.3;
+}
+
+// ---------------------------------------------------------------------------
+// Input
+// ---------------------------------------------------------------------------
+const keys = new Set();
+const touch = { left: false, right: false, startY: 0 };
+addEventListener('keydown', e => {
+  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space'].includes(e.code)) e.preventDefault();
+  keys.add(e.code);
+  if (e.code === 'Space' || e.code === 'Enter') {
+    if (state === 'ready' || state === 'paused') { startOrResume(); return; }
+    if (state === 'over') { restart(); return; }
+  }
+  if ((e.code === 'Space' || e.code === 'KeyW') && !e.repeat) jump();
+  if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
+  if (e.code === 'KeyR' && state !== 'ready') restart();
+  if (e.code === 'KeyV') setView(view === 'first' ? 'third' : 'first');
+});
+addEventListener('keyup', e => keys.delete(e.code));
+addEventListener('blur', () => { keys.clear(); if (state === 'playing') togglePause(); });
+
+function readTouches(e) {
+  touch.left = touch.right = false;
+  for (const t of e.touches) {
+    if (t.clientX < innerWidth / 2) touch.left = true; else touch.right = true;
+  }
+}
+const onViewButtons = e => e.target.closest?.('#views, #skins');
+addEventListener('touchstart', e => {
+  if (onViewButtons(e)) return;
+  overlayTap();
+  touch.startY = e.touches[0].clientY;
+  readTouches(e);
+}, { passive: true });
+addEventListener('touchmove', e => {
+  // Swipe up to jump.
+  if (touch.startY - e.touches[0].clientY > 50) { jump(); touch.startY = -Infinity; }
+  readTouches(e);
+}, { passive: true });
+addEventListener('touchend', readTouches, { passive: true });
+function overlayTap() {
+  if (state === 'over') restart();
+  else if (state === 'ready' || state === 'paused') startOrResume();
+}
+document.getElementById('overlay').addEventListener('mousedown', e => {
+  if (!onViewButtons(e)) overlayTap();
+});
+for (const b of document.querySelectorAll('#views button')) {
+  b.addEventListener('click', () => setView(b.dataset.view));
+}
+
+const held = (...codes) => codes.some(c => keys.has(c));
+
+// ---------------------------------------------------------------------------
+// Game state
+// ---------------------------------------------------------------------------
+const FRESH_PLAYER = { x: 0, y: 0, z: 0, vx: 0, vy: 0, speed: 0, steer: 0, yaw: 0, shake: 0, dip: 0, duck: 0, heading: 0, points: 0, ground: 0, rampJump: false, gems: 0 };
+const levelKmh = points => START_KMH + KMH_PER_POINT * points;
+const player = { ...FRESH_PLAYER };
+let state = 'ready';
+
+// Camera perspective, remembered between visits.
+let view = 'first';
+try { if (localStorage.getItem('powderRun.view') === 'third') view = 'third'; } catch {}
+
+function setView(v) {
+  view = v;
+  try { localStorage.setItem('powderRun.view', v); } catch {}
+  for (const b of document.querySelectorAll('#views button')) {
+    b.classList.toggle('active', b.dataset.view === v);
+  }
+}
+setView(view);
+
+let best = 0;
+try { best = Number(localStorage.getItem('powderRun.best')) || 0; } catch {}
+let gems = 0; // the currency: kept between runs, for skins
+try { gems = Number(localStorage.getItem('powderRun.gems')) || 0; } catch {}
+
+const ui = {
+  hud: document.getElementById('hud'),
+  overlay: document.getElementById('overlay'),
+  title: document.getElementById('title'),
+  subtitle: document.getElementById('subtitle'),
+  go: document.getElementById('go'),
+  keys: document.getElementById('keys'),
+  dist: document.getElementById('dist'),
+  points: document.getElementById('points'),
+  pointsChip: document.getElementById('points-chip'),
+  levelBar: document.getElementById('level-bar'),
+  toast: document.getElementById('toast'),
+  zone: document.getElementById('zone'),
+  speed: document.getElementById('speed'),
+  gems: document.getElementById('gems'),
+  gemsChip: document.getElementById('gems-chip'),
+  cardGems: document.getElementById('card-gems'),
+  skinNote: document.getElementById('skin-note'),
+};
+ui.gems.textContent = gems;
+
+// Skins: bought with gems, kept between runs.
+const SKINS = {
+  classic: { name: 'Classic', price: 0 },
+  dogSled: { name: 'Dog Sled', price: 50 }, // three huskies out front pulling you along
+  snowboard: { name: 'Snowboard', price: 30 },
+  snowmobile: { name: 'Snowmobile', price: 100 },
+};
+let ownedSkins = ['classic'];
+try { ownedSkins = JSON.parse(localStorage.getItem('powderRun.skins')) || ownedSkins; } catch {}
+let skin = 'classic';
+try { const s = localStorage.getItem('powderRun.skin'); if (ownedSkins.includes(s)) skin = s; } catch {}
+
+function renderSkins() {
+  ui.cardGems.textContent = gems;
+  for (const b of document.querySelectorAll('#skins button')) {
+    const id = b.dataset.skin, { name, price } = SKINS[id], owned = ownedSkins.includes(id);
+    b.classList.toggle('active', id === skin);
+    b.classList.toggle('locked', !owned && gems < price);
+    b.innerHTML = owned ? name : `${name} <span class="gem-icon"></span>${price}`;
+  }
+}
+function chooseSkin(id) {
+  ui.skinNote.textContent = '';
+  if (!ownedSkins.includes(id)) {
+    const { name, price } = SKINS[id];
+    if (gems < price) {
+      ui.skinNote.textContent = `You need ${price - gems} more gems for the ${name}.`;
+      return;
+    }
+    gems -= price;
+    ownedSkins.push(id);
+    ui.gems.textContent = gems;
+    try {
+      localStorage.setItem('powderRun.gems', gems);
+      localStorage.setItem('powderRun.skins', JSON.stringify(ownedSkins));
+    } catch {}
+  }
+  skin = id;
+  try { localStorage.setItem('powderRun.skin', id); } catch {}
+  renderSkins();
+  applySkin();
+}
+// Skis, a board or a snowmobile, in both views.
+function applySkin() {
+  const board = skin === 'snowboard', sled = skin === 'snowmobile', skis = !board && !sled;
+  skier.skis.forEach(s => { s.visible = skis; });
+  skier.poles.forEach(p => { p.visible = skis; });
+  skier.board.visible = board;
+  skier.sled.visible = sled;
+  viewModel.pair.forEach(s => { s.visible = skis; });
+  viewModel.board.visible = board;
+  viewModel.sled.visible = sled;
+}
+for (const b of document.querySelectorAll('#skins button')) {
+  b.addEventListener('click', () => chooseSkin(b.dataset.skin));
+}
+renderSkins();
+applySkin();
+
+function startOrResume() {
+  state = 'playing';
+  ui.overlay.classList.add('hidden');
+  ui.hud.classList.add('show');
+}
+
+function togglePause() {
+  if (state === 'playing') {
+    state = 'paused';
+    ui.title.innerHTML = 'Paused';
+    ui.subtitle.textContent = `${player.points} points, ${Math.floor(-player.z)} m down the mountain. Press R to restart.`;
+    ui.go.textContent = 'Press Space or tap to resume';
+    ui.keys.hidden = false;
+    ui.overlay.classList.remove('hidden');
+  } else if (state === 'paused') {
+    startOrResume();
+  }
+}
+
+function restart() {
+  newBiomeRun();
+  rollTime = 0;
+  Object.assign(player, FRESH_PLAYER);
+  updateScore(true);
+  updateBiome(true);
+  layoutSegments();
+  updateRollers(0);
+  placeRamp();
+  placeStones();
+  placeCliff();
+  spray.life.fill(0);
+  spray.pos.fill(-1000);
+  applySkin();
+  shards.forEach(m => { m.visible = false; });
+  startOrResume();
+  snapCamera();
+}
+
+const airborne = () => player.y > player.ground + 0.001;
+
+function jump() {
+  if (state !== 'playing' || airborne()) return;
+  player.vy = JUMP_VELOCITY;
+  player.rampJump = player.ground > 0; // jumping on the trench ramp is what gets you across
+  player.y = player.ground + 0.002;
+  emitSpray(player.x, player.z, 0, player.speed, 25);
+}
+
+function updatePlayer(dt) {
+  const input = (held('ArrowRight', 'KeyD') || touch.right ? 1 : 0) - (held('ArrowLeft', 'KeyA') || touch.left ? 1 : 0);
+  const brake = held('ArrowDown') && !airborne();
+
+  player.steer += (input - player.steer) * Math.min(1, dt * 8);
+  player.duck += ((held('KeyS') ? 1 : 0) - player.duck) * Math.min(1, dt * 12);
+
+  // The run sets your speed; braking or hitting rocks only slows you for a moment.
+  const target = levelKmh(player.points) / 3.6;
+  if (brake) player.speed = Math.max(0, player.speed - BRAKE * dt);
+  else player.speed = Math.min(target, player.speed + PUSH_ACCEL * dt);
+
+  // Steering turns you, and you keep facing that way until you steer back.
+  // Turning is slower in the air and while ducking.
+  player.heading += player.steer * TURN_RATE * (airborne() ? 0.6 : 1) * (1 - 0.5 * player.duck) * dt;
+  player.heading = THREE.MathUtils.clamp(player.heading, -MAX_HEADING, MAX_HEADING);
+  const before = -player.z, beforeX = player.x;
+  player.vx = Math.sin(player.heading) * player.speed;
+  player.x += player.vx * dt;
+  player.z -= Math.cos(player.heading) * player.speed * dt;
+
+  // Off the lip of the ramp: jump on it and you're launched over the trench,
+  // otherwise it's just a little kick and you drop in.
+  const trench = trenchAt(-player.z);
+  if (trench && before <= trench.lip && -player.z > trench.lip
+      && Math.abs(player.x - trench.x) < RAMP_W / 2 + 0.3 && player.y < RAMP_H + 2.5) {
+    const downhill = Math.max(3, Math.cos(player.heading) * player.speed);
+    if (player.rampJump) {
+      const flight = (trench.to + RAMP_CLEARANCE - trench.lip) / downhill; // seconds to clear the far side
+      const launch = THREE.MathUtils.clamp((GRAVITY * flight * flight / 2 - player.y) / flight, 6, 30);
+      player.vy = Math.max(player.vy, launch);
+      emitSpray(player.x, player.z, 0, player.speed, 40);
+    } else {
+      player.vy = Math.max(player.vy, downhill * RAMP_H / RAMP_LEN);
+    }
+    player.y += 0.002;
+  }
+
+  const wasAirborne = airborne() || player.vy > 0;
+  player.ground = groundAt(player.x, player.z, player.y);
+  if (player.y < player.ground - STEP_UP) {
+    // Slammed into the side of a stone, the ramp or the far wall of a trench: bounce back off it.
+    player.x = beforeX;
+    player.z = -before;
+    player.ground = groundAt(player.x, player.z, player.y);
+    startCrash(Math.random() < 0.5 ? -1 : 1, null, player.ground < -1 ? stretchAt(before).pit : null);
+    return;
+  }
+  if (wasAirborne || player.y > player.ground) {
+    player.vy -= GRAVITY * dt;
+    player.y += player.vy * dt;
+    if (player.y <= player.ground) {
+      player.rampJump = false;
+      player.dip = Math.min(0.45, -player.vy * 0.04);
+      player.y = player.ground;
+      player.vy = 0;
+      emitSpray(player.x, player.z, -1, player.speed, 20);
+      emitSpray(player.x, player.z, 1, player.speed, 20);
+    }
+  } else {
+    player.y = player.ground; // riding up the ramp
+  }
+  player.dip = Math.max(0, player.dip - dt * 1.6);
+
+  // Didn't make it across.
+  if (player.y < -1.5) {
+    startCrash(Math.random() < 0.5 ? -1 : 1, null, stretchAt(-player.z).pit);
+    return;
+  }
+
+  // Rock walls: touch them and you wipe out.
+  if (Math.abs(player.x) > WALL_LIMIT) {
+    player.x = Math.sign(player.x) * WALL_LIMIT;
+    startCrash(Math.sign(player.x));
+    return;
+  }
+
+  // The rock wall: through the passage or into the rock. A little give, since the faces are chopped in.
+  const cliff = cliffAt(-player.z);
+  const face = cliff && cliff.from - PLAYER_RADIUS + 0.3, side = PASSAGE_W / 2 - PLAYER_RADIUS + 0.2;
+  if (cliff && -player.z > face && Math.abs(player.x - cliff.x) > side) {
+    const scraped = before > face; // already in the passage and caught a side
+    if (scraped) player.x = cliff.x + Math.sign(player.x - cliff.x) * side;
+    else player.z = -face;
+    startCrash(scraped ? Math.sign(player.x - cliff.x) : (Math.random() < 0.5 ? -1 : 1), { kind: 'cliff', x: player.x, z: player.z });
+    return;
+  }
+
+  // Trees and rocks on the run.
+  const hit = hitObstacle();
+  if (hit) {
+    startCrash(Math.sign(hit.x - player.x) || 1, hit);
+    return;
+  }
+
+  player.yaw = -player.heading;
+
+  // Spray when carving hard or braking.
+  if (!airborne()) {
+    const carve = Math.abs(player.steer) * player.speed;
+    spray.carry += (carve * 1.6 + (brake ? player.speed * 4 : 0)) * dt;
+    const n = Math.floor(spray.carry);
+    if (n > 0) {
+      spray.carry -= n;
+      emitSpray(player.x, player.z, -Math.sign(player.steer || 1), player.speed, n);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Crashing: the skis shatter and the skier topples into the snow
+// ---------------------------------------------------------------------------
+const SHARDS_PER_SKI = 6;
+const SHARD_LEN = 1.8 / SHARDS_PER_SKI;
+const shards = [];
+for (let i = 0; i < SHARDS_PER_SKI * 2; i++) {
+  const m = new THREE.Mesh(
+    new THREE.BoxGeometry(0.12, 0.04, SHARD_LEN * (0.6 + Math.random() * 0.4)),
+    i % 4 === 1 ? stripeMat : skiMat
+  );
+  m.castShadow = true;
+  m.visible = false;
+  m.userData = { vel: new THREE.Vector3(), spin: new THREE.Vector3() };
+  course.add(m);
+  shards.push(m);
+}
+
+const crash = { t: 0, side: 0, vx: 0, vy: 0, vz: 0, tip: 0, tipVel: 0, spin: 0, landed: false, dist: 0, obstacle: null, pit: null };
+const crashLook = new THREE.Vector3();
+
+// side: which way the thing you hit is (+1 = to your right). pit: the trench you fell into.
+function startCrash(side, obstacle = null, pit = null) {
+  state = 'crashed';
+  Object.assign(crash, {
+    t: 0, side, landed: false, dist: Math.floor(-player.z), obstacle, pit,
+    // Hitting something head-on knocks you back; scraping the wall carries you on; a trench just swallows you.
+    vx: pit ? 0 : -side * (obstacle ? 2 : 3), vy: player.vy, vz: pit ? 0 : obstacle ? -1.5 : player.speed * 0.4,
+    tip: 0.1, tipVel: 2 + player.speed * 0.05,
+    spin: -side * (1.5 + Math.random()),
+  });
+  player.shake = 0.6;
+  crashLook.copy(look);
+
+  // Break each ski into pieces right where it was and fling them away from the rocks.
+  skier.skis.forEach(s => { s.visible = false; });
+  skier.board.visible = false;
+  skier.sled.visible = false;
+  const cos = Math.cos(player.yaw), sin = Math.sin(player.yaw);
+  shards.forEach((m, i) => {
+    const across = (i < SHARDS_PER_SKI ? -1 : 1) * 0.17;
+    const along = -0.9 + ((i % SHARDS_PER_SKI) + 0.5) * SHARD_LEN;
+    m.position.set(player.x + across * cos + along * sin, player.y + 0.05, player.z - across * sin + along * cos);
+    m.rotation.set(0, player.yaw, 0);
+    m.userData.vel.set(-side * (2 + Math.random() * 5) + (Math.random() - 0.5) * 3, 3 + Math.random() * 6, -player.speed * (0.2 + Math.random() * 0.4));
+    m.userData.spin.set((Math.random() - 0.5) * 20, (Math.random() - 0.5) * 20, (Math.random() - 0.5) * 20);
+    m.visible = true;
+  });
+  emitSpray(player.x, player.z, -side, player.speed * 0.5, 120);
+  if (obstacle?.kind === 'tree') emitSpray(obstacle.x, obstacle.z + 1, 0, 0, 80); // snow shaken off the branches
+  if (['snowman', 'fallenSnowman', 'snowHead', 'snowball'].includes(obstacle?.kind)) {
+    // Smashed to powder.
+    obstacle.mesh.visible = false;
+    emitSpray(obstacle.x, obstacle.z + 1.5, -1, 3, 120);
+    emitSpray(obstacle.x, obstacle.z + 1.5, 1, 3, 120);
+  }
+
+  player.speed = 0;
+  ui.speed.textContent = 0;
+  ui.toast.classList.remove('show');
+}
+
+function updateShards(dt) {
+  const friction = Math.exp(-dt * 4);
+  for (const m of shards) {
+    if (!m.visible) continue;
+    const { vel, spin } = m.userData;
+    vel.y -= GRAVITY * dt;
+    m.position.addScaledVector(vel, dt);
+    m.rotation.x += spin.x * dt;
+    m.rotation.y += spin.y * dt;
+    m.rotation.z += spin.z * dt;
+    const floor = groundAt(m.position.x, m.position.z, m.position.y) + 0.03;
+    if (m.position.y < floor) {
+      m.position.y = floor;
+      vel.y = vel.y < -1.5 ? -vel.y * 0.3 : 0;
+      vel.x *= friction;
+      vel.z *= friction;
+      spin.multiplyScalar(friction);
+      // Settle flat on the snow.
+      const flat = Math.min(1, dt * 8);
+      m.rotation.x += (Math.round(m.rotation.x / Math.PI) * Math.PI - m.rotation.x) * flat;
+      m.rotation.z += (Math.round(m.rotation.z / Math.PI) * Math.PI - m.rotation.z) * flat;
+    }
+  }
+}
+
+function updateCrash(dt) {
+  crash.t += dt;
+
+  // Slide to a stop, away from the rocks.
+  const drag = Math.exp(-dt * 1.8);
+  crash.vx *= drag;
+  crash.vz *= drag;
+  player.x = THREE.MathUtils.clamp(player.x + crash.vx * dt, -WALL_LIMIT, WALL_LIMIT);
+  player.z -= crash.vz * dt;
+  const floor = groundAt(player.x, player.z, player.y);
+  if (player.y > floor) {
+    crash.vy -= GRAVITY * dt;
+    player.y = Math.max(floor, player.y + crash.vy * dt);
+  }
+
+  // Topple over like a falling plank, with a little bounce on the snow.
+  crash.tipVel += 10 * Math.sin(crash.tip) * dt;
+  crash.tip += crash.tipVel * dt;
+  if (crash.tip >= Math.PI / 2) {
+    crash.tip = Math.PI / 2;
+    if (!crash.landed) {
+      crash.landed = true;
+      player.shake = 0.3;
+      emitSpray(player.x, player.z + 1.5, -crash.side, 0, 50);
+    }
+    crash.tipVel = Math.abs(crash.tipVel) > 1 ? -crash.tipVel * 0.25 : 0;
+  }
+  crash.spin *= Math.exp(-dt * 2);
+  player.yaw += crash.spin * dt;
+
+  const r = skier.root;
+  r.position.set(player.x, player.y + Math.sin(crash.tip) * 0.18, player.z);
+  r.rotation.set(0, player.yaw, crash.side * crash.tip);
+  skier.body.position.y = 0;
+  skier.body.scale.y = 1;
+  skier.body.rotation.x = 0;
+
+  // The tree you hit shudders.
+  if (crash.obstacle?.kind === 'tree') {
+    crash.obstacle.mesh.rotation.z = Math.sin(crash.t * 25) * Math.exp(-crash.t * 4) * 0.08;
+  }
+
+  updateShards(dt);
+  if (state === 'crashed' && crash.t > 1.8) showGameOver();
+}
+
+function showGameOver() {
+  state = 'over';
+  const newBest = player.points > best;
+  if (newBest) {
+    best = player.points;
+    try { localStorage.setItem('powderRun.best', best); } catch {}
+  }
+  ui.title.innerHTML = 'Wiped <span>out!</span>';
+  ui.subtitle.textContent = `${player.points} points · ${crash.dist} m · ` + (player.gems ? `+${player.gems} gem${player.gems > 1 ? 's' : ''} · ` : '')
+    + (newBest ? 'New best!' : `Best: ${best} points`);
+  ui.go.textContent = 'Press Space or tap to ride again';
+  ui.keys.hidden = true;
+  ui.overlay.classList.remove('hidden');
+}
+
+// ---------------------------------------------------------------------------
+// Score: a point every 50 m, and every point makes you faster
+// ---------------------------------------------------------------------------
+let toastTimer = 0;
+function showToast(text) {
+  ui.toast.textContent = text;
+  ui.toast.classList.remove('show');
+  void ui.toast.offsetWidth; // restart the animation
+  ui.toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => ui.toast.classList.remove('show'), 1800);
+}
+
+let currentBiome = biomeAt(0);
+function updateBiome(reset = false) {
+  const biome = biomeAt(reset ? 0 : -player.z);
+  if (biome === currentBiome && !reset) return;
+  currentBiome = biome;
+  ui.zone.textContent = biome.name;
+  if (!reset) showToast(biome.name);
+}
+updateBiome(true);
+
+function updateScore(reset = false) {
+  const points = Math.floor(-player.z / METERS_PER_POINT);
+  if (points !== player.points || reset) {
+    const before = player.points;
+    player.points = points;
+    ui.points.textContent = points;
+    if (!reset) {
+      ui.pointsChip.classList.remove('bump');
+      void ui.pointsChip.offsetWidth;
+      ui.pointsChip.classList.add('bump');
+      if (Math.floor(points / MILESTONE_POINTS) > Math.floor(before / MILESTONE_POINTS)) {
+        showToast(`${points} points! ${levelKmh(points)} km/h`);
+      }
+    }
+  }
+  // Progress toward the next point.
+  const meters = -player.z % METERS_PER_POINT;
+  ui.levelBar.style.transform = `scaleX(${meters / METERS_PER_POINT})`;
+}
+
+function updateModels(t) {
+  const crashed = state === 'crashed' || state === 'over';
+  const firstPerson = view === 'first';
+  skier.root.visible = !firstPerson || crashed;
+  viewModel.root.visible = firstPerson && !crashed;
+  if (crashed) return;
+
+  const air = Math.min(1, (player.y - player.ground) / 1.5);
+  const bob = state === 'playing' && !airborne() ? Math.sin(t * 11) * 0.012 * Math.min(1, player.speed / 10) : 0;
+
+  // First person: skis tilt onto their edges as you carve.
+  const { skis, root } = viewModel;
+  skis.rotation.set(CAM_PITCH + air * 0.35, 0, player.steer * 0.25, 'YXZ');
+  skis.position.y = -1.45 - air * 0.25 + player.dip * 0.5 + player.duck * DUCK_DROP;
+  root.position.y = bob;
+
+  // Third person: lean into turns, tip the skis up in the air, squash on landing.
+  const r = skier.root;
+  r.position.set(player.x, player.y, player.z);
+  r.rotation.set(-air * 0.25, player.yaw, -player.steer * 0.42 * Math.min(1, player.speed / 12));
+  const board = skin === 'snowboard';
+  skier.body.rotation.set(-player.duck * 0.3, board ? -STANCE : 0, 0); // lean forward into the crouch, side-on on a board
+  skier.head.rotation.y = board ? HEAD_TURN : 0;
+  skier.body.position.y = bob;
+  skier.body.scale.y = 1 - player.dip * 0.5 - player.duck * 0.42;
+}
+
+// ---------------------------------------------------------------------------
+// Camera
+// ---------------------------------------------------------------------------
+const CAM_LOOK_AHEAD = 12;
+const CAM_LOOK_DROP = 1.6;
+const CAM_PITCH = Math.atan2(CAM_LOOK_DROP, CAM_LOOK_AHEAD);
+const eye = new THREE.Vector3();
+const look = new THREE.Vector3();
+const chase = { heading: 0, y: 3.7 }; // smoothed third-person camera
+const lastCamPos = new THREE.Vector3();
+
+function snapCamera() {
+  chase.heading = player.heading;
+  chase.y = 3.7 + player.y * 0.6;
+  updateCamera(0);
+  lastCamPos.copy(camera.position);
+}
+
+function updateCamera(dt) {
+  if (state === 'crashed' || state === 'over') updateCrashCamera(dt);
+  else updateRideCamera(dt);
+
+  // Sun and its shadow box follow the skier.
+  const p = course.localToWorld(new THREE.Vector3(player.x, 0, player.z - 15));
+  sun.target.position.copy(p);
+  sun.position.copy(p).add(new THREE.Vector3(-22, 42, -26));
+
+  mountains.position.set(camera.position.x * 0.9, camera.position.y, camera.position.z);
+}
+
+function applyShake(dt) {
+  if (player.shake <= 0) return;
+  const s = player.shake;
+  camera.position.x += (Math.random() - 0.5) * s;
+  camera.position.y += (Math.random() - 0.5) * s;
+  player.shake = Math.max(0, player.shake - dt * 1.8);
+}
+
+// Swing out from wherever the camera was to watch the wipeout. Aiming above the
+// skier keeps them in the lower part of the screen, below the game-over card.
+function updateCrashCamera(dt) {
+  const k = 1 - Math.exp(-dt * 2.5);
+  const camX = THREE.MathUtils.clamp(player.x - crash.side * 4.5, -HALF_W + 1, HALF_W - 1);
+  if (crash.pit?.stones) {
+    // Look down into the chasm from the edge of the run.
+    course.localToWorld(eye.set(camX, 2.5, player.z + 7));
+    course.localToWorld(look.set(player.x, player.y + 2.6, player.z));
+  } else if (crash.pit) {
+    // Down in the trench with the skier, backed up against the near wall.
+    course.localToWorld(eye.set(camX, player.y + 4.5, Math.min(player.z + 6, -crash.pit.from - 0.5)));
+    course.localToWorld(look.set(player.x, player.y + 2.6, player.z));
+  } else {
+    course.localToWorld(eye.set(inPassage(camX, player.z + 6, 0.4), 3.2, player.z + 6));
+    course.localToWorld(look.set(player.x, 2.6, player.z));
+  }
+  camera.position.lerp(eye, k);
+  crashLook.lerp(look, Math.min(1, k * 1.6));
+  applyShake(dt);
+  camera.lookAt(crashLook);
+  camera.fov += (60 - camera.fov) * k;
+  camera.updateProjectionMatrix();
+}
+
+function updateRideCamera(dt) {
+  // Chase cam swings round behind you a beat after you turn. Tracked in both
+  // views so switching perspective doesn't swoop.
+  const k = dt ? 1 - Math.exp(-dt * 4) : 1;
+  chase.heading += (player.heading - chase.heading) * k;
+  chase.y += (3.7 + player.speed * 0.025 + player.y * 0.6 - chase.y) * k;
+
+  if (view === 'first') {
+    const fx = Math.sin(player.heading), fz = -Math.cos(player.heading);
+    eye.set(player.x, EYE_HEIGHT - player.duck * DUCK_DROP + player.y - player.dip, player.z);
+    look.set(eye.x + fx * CAM_LOOK_AHEAD, eye.y - CAM_LOOK_DROP, eye.z + fz * CAM_LOOK_AHEAD);
+  } else {
+    const fx = Math.sin(chase.heading), fz = -Math.cos(chase.heading);
+    const back = 7.5 + player.speed * 0.06;
+    // Keep the camera out of the rock walls when you're facing across the run.
+    eye.set(THREE.MathUtils.clamp(player.x - fx * back, -HALF_W + 0.5, HALF_W - 0.5), chase.y, player.z - fz * back);
+    eye.x = inPassage(eye.x, eye.z, 0.4); // and out of the rock wall
+    if (cliffAt(-eye.z) && -eye.z > cliffAt(-eye.z).from - 0.5) eye.y = Math.min(eye.y, TUNNEL_H - 0.6); // under the roof
+    look.set(player.x + fx * 9, 0.9 + player.y * 0.5, player.z + fz * 9);
+  }
+  course.localToWorld(eye);
+  course.localToWorld(look);
+
+  camera.position.copy(eye);
+  applyShake(dt);
+  camera.lookAt(look);
+  camera.rotateZ(-player.steer * (view === 'first' ? 0.1 : 0.03)); // lean into the turn
+
+  const fov = (view === 'first' ? 72 : 62) + Math.min(player.speed, 45) * (view === 'first' ? 0.4 : 0.32);
+  if (Math.abs(camera.fov - fov) > 0.01) {
+    camera.fov += (fov - camera.fov) * Math.min(1, dt * 3 || 1);
+    camera.updateProjectionMatrix();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Loop
+// ---------------------------------------------------------------------------
+const clock = new THREE.Clock();
+updateRollers(0);
+placeRamp();
+placeStones();
+placeCliff();
+snapCamera();
+
+function frame() {
+  const dt = Math.min(clock.getDelta(), 1 / 20);
+  const t = clock.elapsedTime;
+
+  if (state === 'playing') {
+    updateRollers(dt);
+    placeRamp();
+    placeStones();
+    placeCliff();
+    updatePlayer(dt);
+    recycleSegments(player.z);
+    ui.dist.textContent = Math.floor(-player.z);
+    updateScore();
+    updateBiome();
+    ui.speed.textContent = Math.round(player.speed * 3.6);
+  }
+  if (state === 'crashed' || state === 'over') updateCrash(dt);
+  if (state !== 'paused') updateSpray(dt);
+  updateGems(t);
+  updateDogs(dt);
+  updateModels(t);
+  updateCamera(dt);
+  updateFlakes(state === 'paused' ? 0 : dt, t);
+
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>
